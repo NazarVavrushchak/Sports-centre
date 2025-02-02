@@ -10,6 +10,8 @@ import sports.center.com.dao.GenericDao;
 import sports.center.com.model.User;
 
 import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -23,6 +25,7 @@ public class UsernameUtilTest {
     void setup() {
         MockitoAnnotations.openMocks(this);
     }
+
     @AfterEach
     void tearDown() {
         Mockito.framework().clearInlineMocks();
@@ -34,7 +37,9 @@ public class UsernameUtilTest {
         String lastName = "Smith";
         when(userDao.findAll()).thenReturn(List.of());
 
-        String username = UsernameUtil.generateUsername(firstname, lastName, userDao);
+        Set<String> usernames = userDao.findAll().stream().map(User::getUsername).collect(Collectors.toSet());
+        String username = UsernameUtil.generateUsername(firstname, lastName, usernames);
+
         assertEquals("jane.smith", username);
         verify(userDao, times(1)).findAll();
     }
@@ -47,7 +52,8 @@ public class UsernameUtilTest {
         when(existingUser.getUsername()).thenReturn("jane.smith");
         when(userDao.findAll()).thenReturn(List.of(existingUser));
 
-        String username = UsernameUtil.generateUsername(firstName, lastName, userDao);
+        Set<String> usernames = userDao.findAll().stream().map(User::getUsername).collect(Collectors.toSet());
+        String username = UsernameUtil.generateUsername(firstName, lastName, usernames);
 
         assertEquals("jane.smith1", username);
         verify(userDao, times(1)).findAll();
@@ -67,7 +73,8 @@ public class UsernameUtilTest {
 
         when(userDao.findAll()).thenReturn(List.of(user1, user2, user3));
 
-        String username = UsernameUtil.generateUsername(firstName, lastName, userDao);
+        Set<String> usernames = userDao.findAll().stream().map(User::getUsername).collect(Collectors.toSet());
+        String username = UsernameUtil.generateUsername(firstName, lastName, usernames);
 
         assertEquals("jane.smith3", username);
         verify(userDao, times(1)).findAll();
@@ -79,7 +86,7 @@ public class UsernameUtilTest {
         String lastName = "Smith";
 
         assertThrows(IllegalArgumentException.class, () ->
-                UsernameUtil.generateUsername(firstName, lastName, userDao));
+                UsernameUtil.generateUsername(firstName, lastName, Set.of()));
     }
 
     @Test
@@ -88,17 +95,16 @@ public class UsernameUtilTest {
         String lastName = "Smith";
         User user1 = mock(User.class);
         User user2 = mock(User.class);
-        User user3 = mock(User.class);
 
         when(user1.getUsername()).thenReturn("jane.smith");
         when(user2.getUsername()).thenReturn("jane.smith1");
-        when(user3.getUsername()).thenReturn("jane.smith2");
 
-        when(userDao.findAll()).thenReturn(List.of(user1, user3));
+        when(userDao.findAll()).thenReturn(List.of(user1, user2));
 
-        String username = UsernameUtil.generateUsername(firstName, lastName, userDao);
+        Set<String> usernames = userDao.findAll().stream().map(User::getUsername).collect(Collectors.toSet());
+        String username = UsernameUtil.generateUsername(firstName, lastName, usernames);
 
-        assertEquals("jane.smith3", username);
+        assertEquals("jane.smith2", username);
         verify(userDao, times(1)).findAll();
     }
 }

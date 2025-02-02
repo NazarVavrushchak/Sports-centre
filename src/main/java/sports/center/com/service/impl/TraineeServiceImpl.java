@@ -11,6 +11,8 @@ import sports.center.com.util.UsernameUtil;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 @Slf4j
@@ -26,66 +28,68 @@ public class TraineeServiceImpl implements TraineeService {
     public void create(Trainee trainee) {
         log.debug("Starting Trainee creation process. Input data: {}", trainee);
 
-        String username = UsernameUtil.generateUsername(trainee.getFirstName(), trainee.getLastName(), traineeDao);
+        Set<String> existingUsernames = getAllUsernames();
+        String username = UsernameUtil.generateUsername(trainee.getFirstName(), trainee.getLastName(), existingUsernames);
         trainee.setUsername(username);
 
-        String password = PasswordUtil.generatePassword();
-        trainee.setPassword(password);
+        trainee.setPassword(PasswordUtil.generatePassword());
 
         traineeDao.create(trainee);
-
-        log.info("Trainee created successfully. Username: {}, ID: {}, Password: {}", username, trainee.getId(), password);
+        log.info("Trainee created successfully. Username: {}, ID: {}", username, trainee.getId());
     }
 
     @Override
-    public void updateTrainee(long id, Trainee newTraineeData) {
+    public void update(long id, Trainee newTraineeData) {
         log.debug("Updating Trainee with ID={}. New data: {}", id, newTraineeData);
 
-        Optional<Trainee> existingTraineeOpt = traineeDao.findById(id);
-        if (existingTraineeOpt.isEmpty()) {
-            log.error("Trainee with ID={} not found.", id);
-            throw new IllegalArgumentException("Trainee not found with ID: " + id);
-        }
-
-        Trainee existingTrainee = existingTraineeOpt.get();
-
-        if (newTraineeData.getFirstName() != null) {
-            existingTrainee.setFirstName(newTraineeData.getFirstName());
-        }
-        if (newTraineeData.getLastName() != null) {
-            existingTrainee.setLastName(newTraineeData.getLastName());
-        }
-        if (newTraineeData.getDateOfBirth() != null) {
-            existingTrainee.setDateOfBirth(newTraineeData.getDateOfBirth());
-        }
-        if (newTraineeData.getAddress() != null) {
-            existingTrainee.setAddress(newTraineeData.getAddress());
-        }
-        if (newTraineeData.getUsername() != null) {
-            existingTrainee.setUsername(newTraineeData.getUsername());
-        } else {
-            String username = UsernameUtil.generateUsername(
-                    newTraineeData.getFirstName() != null ? newTraineeData.getFirstName() : existingTrainee.getFirstName(),
-                    newTraineeData.getLastName() != null ? newTraineeData.getLastName() : existingTrainee.getLastName(),
-                    traineeDao
-            );
-            existingTrainee.setUsername(username);
-        }
-
-        if (newTraineeData.getPassword() != null) {
-            existingTrainee.setPassword(newTraineeData.getPassword());
-        } else {
-            existingTrainee.setPassword(PasswordUtil.generatePassword());
-        }
-
-        existingTrainee.setActive(newTraineeData.isActive());
+        Trainee existingTrainee = getTraineeOrThrow(id);
+        updateTraineeFields(existingTrainee, newTraineeData);
 
         traineeDao.update(id, existingTrainee);
         log.info("Trainee with ID={} successfully updated.", id);
     }
 
+    private Trainee getTraineeOrThrow(long id) {
+        return getById(id).orElseThrow(() -> {
+            log.error("Trainee with ID={} not found.", id);
+            return new IllegalArgumentException("Trainee not found with ID: " + id);
+        });
+    }
+
+    private void updateTraineeFields(Trainee existingTrainee, Trainee newTraineeData) {
+        Optional.ofNullable(newTraineeData.getFirstName()).ifPresent(existingTrainee::setFirstName);
+        Optional.ofNullable(newTraineeData.getLastName()).ifPresent(existingTrainee::setLastName);
+        Optional.ofNullable(newTraineeData.getDateOfBirth()).ifPresent(existingTrainee::setDateOfBirth);
+        Optional.ofNullable(newTraineeData.getAddress()).ifPresent(existingTrainee::setAddress);
+
+        Optional.ofNullable(newTraineeData.getUsername())
+                .ifPresentOrElse(existingTrainee::setUsername,
+                        () -> existingTrainee.setUsername(generateOrUpdateUsername(existingTrainee, newTraineeData)));
+
+        Optional.ofNullable(newTraineeData.getPassword())
+                .ifPresentOrElse(existingTrainee::setPassword,
+                        () -> existingTrainee.setPassword(PasswordUtil.generatePassword()));
+
+        existingTrainee.setActive(newTraineeData.isActive());
+    }
+
+    private String generateOrUpdateUsername(Trainee existingTrainee, Trainee newTraineeData) {
+        Set<String> existingUsernames = getAllUsernames();
+        return UsernameUtil.generateUsername(
+                Optional.ofNullable(newTraineeData.getFirstName()).orElse(existingTrainee.getFirstName()),
+                Optional.ofNullable(newTraineeData.getLastName()).orElse(existingTrainee.getLastName()),
+                existingUsernames
+        );
+    }
+
+    private Set<String> getAllUsernames() {
+        return traineeDao.findAll().stream()
+                .map(Trainee::getUsername)
+                .collect(Collectors.toSet());
+    }
+
     @Override
-    public void deleteTrainee(long id) {
+    public void delete(long id) {
         log.debug("Deleting Trainee with ID={}", id);
         traineeDao.delete(id);
         log.info("Trainee with ID={} successfully deleted.", id);

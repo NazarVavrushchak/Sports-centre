@@ -62,24 +62,24 @@ public class TraineeServiceImplTest {
         when(traineeDao.findById(1L)).thenReturn(Optional.empty());
 
         IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () ->
-                traineeService.updateTrainee(1L, new Trainee()));
+                traineeService.update(1L, new Trainee()));
 
         assertEquals("Trainee not found with ID: 1", exception.getMessage());
     }
 
     @Test
-    void updateTrainee_NotFound() {
+    void update_NotFound() {
         when(traineeDao.findById(1L)).thenReturn(Optional.empty());
 
         IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () ->
-                traineeService.updateTrainee(1L, new Trainee()));
+                traineeService.update(1L, new Trainee()));
 
         assertEquals("Trainee not found with ID: 1", exception.getMessage());
     }
 
     @Test
-    void deleteTrainee() {
-        traineeService.deleteTrainee(1L);
+    void delete() {
+        traineeService.delete(1L);
 
         verify(traineeDao).delete(1L);
     }

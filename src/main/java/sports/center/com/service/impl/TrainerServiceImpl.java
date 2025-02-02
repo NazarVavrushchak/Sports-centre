@@ -11,6 +11,8 @@ import sports.center.com.util.UsernameUtil;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 @Slf4j
@@ -27,14 +29,13 @@ public class TrainerServiceImpl implements TrainerService {
     public void create(Trainer trainer) {
         log.debug("Starting Trainer creation process. Input data: {}", trainer);
 
-        String username = UsernameUtil.generateUsername(trainer.getFirstName(), trainer.getLastName(), trainerDao);
+        Set<String> existingUsernames = getAllUsernames();
+        String username = UsernameUtil.generateUsername(trainer.getFirstName(), trainer.getLastName(), existingUsernames);
         trainer.setUsername(username);
 
-        String password = PasswordUtil.generatePassword();
-        trainer.setPassword(password);
+        trainer.setPassword(PasswordUtil.generatePassword());
 
         trainerDao.create(trainer);
-
         log.info("Trainer successfully created with Username={} and ID={}", username, trainer.getId());
     }
 
@@ -42,44 +43,48 @@ public class TrainerServiceImpl implements TrainerService {
     public void update(long id, Trainer newTrainerData) {
         log.debug("Updating Trainer with ID={}. New data: {}", id, newTrainerData);
 
-        Optional<Trainer> existingTrainerOpt = trainerDao.findById(id);
-        if (existingTrainerOpt.isEmpty()) {
-            log.error("Trainer with ID={} not found.", id);
-            throw new IllegalArgumentException("Trainer not found with ID: " + id);
-        }
-
-        Trainer existingTrainer = existingTrainerOpt.get();
-
-        if (newTrainerData.getFirstName() != null) {
-            existingTrainer.setFirstName(newTrainerData.getFirstName());
-        }
-        if (newTrainerData.getLastName() != null) {
-            existingTrainer.setLastName(newTrainerData.getLastName());
-        }
-        if (newTrainerData.getSpecialization() != null) {
-            existingTrainer.setSpecialization(newTrainerData.getSpecialization());
-        }
-        if (newTrainerData.getUsername() != null) {
-            existingTrainer.setUsername(newTrainerData.getUsername());
-        } else {
-            String username = UsernameUtil.generateUsername(
-                    newTrainerData.getFirstName() != null ? newTrainerData.getFirstName() : existingTrainer.getFirstName(),
-                    newTrainerData.getLastName() != null ? newTrainerData.getLastName() : existingTrainer.getLastName(),
-                    trainerDao
-            );
-            existingTrainer.setUsername(username);
-        }
-
-        if (newTrainerData.getPassword() != null) {
-            existingTrainer.setPassword(newTrainerData.getPassword());
-        } else {
-            existingTrainer.setPassword(PasswordUtil.generatePassword());
-        }
-
-        existingTrainer.setActive(newTrainerData.isActive());
+        Trainer existingTrainer = getTrainerOrThrow(id);
+        updateTrainerFields(existingTrainer, newTrainerData);
 
         trainerDao.update(id, existingTrainer);
         log.info("Trainer with ID={} successfully updated.", id);
+    }
+
+    private Trainer getTrainerOrThrow(long id) {
+        return getById(id).orElseThrow(() -> {
+            log.error("Trainer with ID={} not found.", id);
+            return new IllegalArgumentException("Trainer not found with ID: " + id);
+        });
+    }
+
+    private void updateTrainerFields(Trainer existingTrainer, Trainer newTrainerData) {
+        Optional.ofNullable(newTrainerData.getFirstName()).ifPresent(existingTrainer::setFirstName);
+        Optional.ofNullable(newTrainerData.getLastName()).ifPresent(existingTrainer::setLastName);
+        Optional.ofNullable(newTrainerData.getSpecialization()).ifPresent(existingTrainer::setSpecialization);
+        Optional.ofNullable(newTrainerData.getUsername())
+                .ifPresentOrElse(existingTrainer::setUsername,
+                        () -> existingTrainer.setUsername(generateOrUpdateUsername(existingTrainer, newTrainerData)));
+
+        Optional.ofNullable(newTrainerData.getPassword())
+                .ifPresentOrElse(existingTrainer::setPassword,
+                        () -> existingTrainer.setPassword(PasswordUtil.generatePassword()));
+
+        existingTrainer.setActive(newTrainerData.isActive());
+    }
+
+    private String generateOrUpdateUsername(Trainer existingTrainee, Trainer newTraineeData) {
+        Set<String> existingUsernames = getAllUsernames();
+        return UsernameUtil.generateUsername(
+                Optional.ofNullable(newTraineeData.getFirstName()).orElse(existingTrainee.getFirstName()),
+                Optional.ofNullable(newTraineeData.getLastName()).orElse(existingTrainee.getLastName()),
+                existingUsernames
+        );
+    }
+
+    private Set<String> getAllUsernames() {
+        return trainerDao.findAll().stream()
+                .map(Trainer::getUsername)
+                .collect(Collectors.toSet());
     }
 
     @Override
@@ -92,12 +97,11 @@ public class TrainerServiceImpl implements TrainerService {
 
     @Override
     public List<Trainer> getAll() {
-        List<Trainer> trainers = trainerDao.findAll();
-        return trainers;
+        return trainerDao.findAll();
     }
 
     @Override
-    public void deleteTrainer(long id) {
+    public void delete(long id) {
         log.debug("Deleting Trainer with ID={}", id);
         trainerDao.delete(id);
         log.info("Trainer with ID={} successfully deleted.", id);

@@ -15,6 +15,8 @@ import sports.center.com.util.UsernameUtil;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -47,8 +49,18 @@ class TrainerServiceImplTest {
         Mockito.mockStatic(UsernameUtil.class);
         Mockito.mockStatic(PasswordUtil.class);
 
-        when(trainerDao.findAll()).thenReturn(List.of());
-        when(UsernameUtil.generateUsername(anyString(), anyString(), eq(trainerDao))).thenReturn("jane.smith");
+        Trainer existingTrainer1 = new Trainer();
+        existingTrainer1.setUsername("john.doe");
+        Trainer existingTrainer2 = new Trainer();
+        existingTrainer2.setUsername("jane.doe");
+
+        when(trainerDao.findAll()).thenReturn(List.of(existingTrainer1, existingTrainer2));
+
+        Set<String> usernames = trainerDao.findAll().stream()
+                .map(Trainer::getUsername)
+                .collect(Collectors.toSet());
+
+        when(UsernameUtil.generateUsername(anyString(), anyString(), eq(usernames))).thenReturn("jane.smith");
         when(PasswordUtil.generatePassword()).thenReturn("securePassword123");
 
         trainerService.create(trainer);
@@ -108,10 +120,10 @@ class TrainerServiceImplTest {
     }
 
     @Test
-    void deleteTrainer() {
+    void delete() {
         long trainerId = 1L;
 
-        trainerService.deleteTrainer(trainerId);
+        trainerService.delete(trainerId);
 
         verify(trainerDao, times(1)).delete(trainerId);
     }

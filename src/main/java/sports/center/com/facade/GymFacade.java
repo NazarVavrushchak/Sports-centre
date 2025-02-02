@@ -14,26 +14,34 @@ import sports.center.com.service.TrainingService;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @Component
 public class GymFacade {
     private final TrainerService trainerService;
     private final TraineeService traineeService;
     private final TrainingService trainingService;
-    private final TrainerDao trainerDao;
-    private final TraineeDao traineeDao;
+    private TrainerDao trainerDao;
+    private TraineeDao traineeDao;
 
     @Autowired
     public GymFacade(
             TrainerService trainerService,
             TraineeService traineeService,
-            TrainingService trainingService,
-            TrainerDao trainerDao,
-            TraineeDao traineeDao) {
+            TrainingService trainingService) {
         this.trainerService = trainerService;
         this.traineeService = traineeService;
         this.trainingService = trainingService;
+    }
+
+    @Autowired
+    public void setTrainerDao(TrainerDao trainerDao) {
         this.trainerDao = trainerDao;
+    }
+
+    @Autowired
+    public void setTraineeDao(TraineeDao traineeDao) {
         this.traineeDao = traineeDao;
     }
 
@@ -42,11 +50,11 @@ public class GymFacade {
     }
 
     public void updateTrainee(long id, Trainee trainee) {
-        traineeService.updateTrainee(id, trainee);
+        traineeService.update(id, trainee);
     }
 
     public void deleteTrainee(long id) {
-        traineeService.deleteTrainee(id);
+        traineeService.delete(id);
     }
 
     public Optional<Trainee> getTraineeById(long id) {
@@ -66,7 +74,7 @@ public class GymFacade {
     }
 
     public void deleteTrainer(long id) {
-        trainerService.deleteTrainer(id);
+        trainerService.delete(id);
     }
 
     public Optional<Trainer> getTrainerById(long id) {
@@ -95,5 +103,13 @@ public class GymFacade {
 
     public GenericDao<Trainer> getTrainerDao() {
         return trainerDao;
+    }
+
+    public Set<String> getAllTraineeUsernames() {
+        return traineeDao.findAll().stream().map(Trainee::getUsername).collect(Collectors.toSet());
+    }
+
+    public Set<String> getAllTrainerUsernames() {
+        return trainerDao.findAll().stream().map(Trainer::getUsername).collect(Collectors.toSet());
     }
 }
