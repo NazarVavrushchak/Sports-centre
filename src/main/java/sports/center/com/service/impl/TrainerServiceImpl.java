@@ -4,6 +4,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import sports.center.com.dao.GenericDao;
+import sports.center.com.model.Trainee;
 import sports.center.com.model.Trainer;
 import sports.center.com.service.TrainerService;
 import sports.center.com.util.PasswordUtil;
@@ -13,16 +14,19 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 @Service
 @Slf4j
 public class TrainerServiceImpl implements TrainerService {
 
     private final GenericDao<Trainer> trainerDao;
+    private final GenericDao<Trainee> traineeDao;
 
     @Autowired
-    public TrainerServiceImpl(GenericDao<Trainer> trainerDao) {
+    public TrainerServiceImpl(GenericDao<Trainer> trainerDao, GenericDao<Trainee> traineeDao) {
         this.trainerDao = trainerDao;
+        this.traineeDao = traineeDao;
     }
 
     @Override
@@ -82,9 +86,10 @@ public class TrainerServiceImpl implements TrainerService {
     }
 
     private Set<String> getAllUsernames() {
-        return trainerDao.findAll().stream()
-                .map(Trainer::getUsername)
-                .collect(Collectors.toSet());
+        return Stream.concat(
+                trainerDao.findAll().stream().map(Trainer::getUsername),
+                traineeDao.findAll().stream().map(Trainee::getUsername)
+        ).collect(Collectors.toSet());
     }
 
     @Override

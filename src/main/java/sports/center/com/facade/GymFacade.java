@@ -16,6 +16,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 @Component
 public class GymFacade {
@@ -110,6 +111,9 @@ public class GymFacade {
     }
 
     public Set<String> getAllTrainerUsernames() {
-        return trainerDao.findAll().stream().map(Trainer::getUsername).collect(Collectors.toSet());
+        return Stream.concat(
+                trainerDao.findAll().stream().map(Trainer::getUsername),
+                traineeDao.findAll().stream().map(Trainee::getUsername)
+        ).collect(Collectors.toSet());
     }
 }

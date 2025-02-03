@@ -19,7 +19,7 @@ public class UserDao implements GenericDao<User> {
 
     @Override
     public void create(User entity) {
-        Map<Long , User> namespace = storage.getNamespace(NAMESPACE);
+        Map<Long, User> namespace = storage.getNamespace(NAMESPACE);
 
         long newId = namespace.keySet().stream()
                 .mapToLong(value -> value)
@@ -31,11 +31,11 @@ public class UserDao implements GenericDao<User> {
 
     @Override
     public void update(long id, User entity) {
-        Map<Long , User> namespace = storage .getNamespace(NAMESPACE);
+        Map<Long, User> namespace = storage.getNamespace(NAMESPACE);
         if (!namespace.containsKey(id)) {
             throw new NoSuchElementException("User with id " + id + " not found.");
         }
-        namespace.put(id , entity);
+        namespace.put(id, entity);
     }
 
     @Override

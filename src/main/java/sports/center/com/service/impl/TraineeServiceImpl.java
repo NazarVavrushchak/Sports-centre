@@ -5,6 +5,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import sports.center.com.dao.GenericDao;
 import sports.center.com.model.Trainee;
+import sports.center.com.model.Trainer;
 import sports.center.com.service.TraineeService;
 import sports.center.com.util.PasswordUtil;
 import sports.center.com.util.UsernameUtil;
@@ -13,15 +14,18 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 @Service
 @Slf4j
 public class TraineeServiceImpl implements TraineeService {
     private final GenericDao<Trainee> traineeDao;
+    private final GenericDao<Trainer> trainerDao;
 
     @Autowired
-    public TraineeServiceImpl(GenericDao<Trainee> traineeDao) {
+    public TraineeServiceImpl(GenericDao<Trainee> traineeDao, GenericDao<Trainer> trainerDao) {
         this.traineeDao = traineeDao;
+        this.trainerDao = trainerDao;
     }
 
     @Override
@@ -83,9 +87,10 @@ public class TraineeServiceImpl implements TraineeService {
     }
 
     private Set<String> getAllUsernames() {
-        return traineeDao.findAll().stream()
-                .map(Trainee::getUsername)
-                .collect(Collectors.toSet());
+        return Stream.concat(
+                traineeDao.findAll().stream().map(Trainee::getUsername),
+                trainerDao.findAll().stream().map(Trainer::getUsername)
+        ).collect(Collectors.toSet());
     }
 
     @Override

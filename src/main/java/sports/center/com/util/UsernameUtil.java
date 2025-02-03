@@ -26,10 +26,12 @@ public class UsernameUtil {
 
     private static Set<Integer> extractUsedIndexes(Set<String> existingUsernames, String baseUsername) {
         Pattern pattern = Pattern.compile("^" + Pattern.quote(baseUsername) + "(\\d*)$");
-        return existingUsernames.stream()
+
+        Set<Integer> indexes = existingUsernames.stream()
                 .map(name -> parseIndexFromUsername(pattern, name))
                 .filter(Objects::nonNull)
                 .collect(Collectors.toSet());
+        return indexes;
     }
 
     private static Integer parseIndexFromUsername(Pattern pattern, String username) {
