@@ -23,7 +23,7 @@ class TrainingDaoTest {
     }
 
     @Test
-    void createTraining() {
+    void create() {
         Training training = new Training();
         training.setTraineeId(1);
         training.setTrainerId(1);
@@ -57,7 +57,7 @@ class TrainingDaoTest {
     }
 
     @Test
-    void updateTraining() {
+    void update() {
         Training training = new Training();
         training.setTraineeId(3);
         training.setTrainerId(3);
@@ -79,7 +79,7 @@ class TrainingDaoTest {
     }
 
     @Test
-    void deleteTraining() {
+    void delete() {
         Training training = new Training();
         training.setTraineeId(4);
         training.setTrainerId(4);

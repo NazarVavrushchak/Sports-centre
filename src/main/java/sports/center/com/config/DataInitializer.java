@@ -4,9 +4,6 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import sports.center.com.model.Trainee;
@@ -17,11 +14,9 @@ import sports.center.com.storage.InMemoryStorage;
 import java.io.IOException;
 import java.util.List;
 
-
 @Component
 @Slf4j
 public class DataInitializer {
-    private static final Logger logger = LoggerFactory.getLogger(DataInitializer.class);
 
     @Value("${data.initial.trainers.file}")
     private String trainersFile;
@@ -35,7 +30,6 @@ public class DataInitializer {
     private final InMemoryStorage storage;
     private final ObjectMapper objectMapper;
 
-    @Autowired
     public DataInitializer(InMemoryStorage storage, ObjectMapper objectMapper) {
         this.storage = storage;
         this.objectMapper = objectMapper;
@@ -44,42 +38,24 @@ public class DataInitializer {
     @PostConstruct
     public void fillInData() {
         try {
-            List<Trainee> trainees = loadTraineesFromJson(traineesFile);
-            List<Trainer> trainers = loadTrainersFromJson(trainersFile);
-            List<Training> trainings = loadTrainingsFromJson(trainingsFile);
+            storage.loadInitialData("trainee", loadDataFromJson(traineesFile, new TypeReference<List<Trainee>>() {
+            }));
+            storage.loadInitialData("trainer", loadDataFromJson(trainersFile, new TypeReference<List<Trainer>>() {
+            }));
+            storage.loadInitialData("training", loadDataFromJson(trainingsFile, new TypeReference<List<Training>>() {
+            }));
 
-            storage.loadInitialData("trainee", trainees);
-            storage.loadInitialData("trainer", trainers);
-            storage.loadInitialData("training", trainings);
-
-            logger.info("Data initialization from JSON completed successfully.");
+            log.info("Data initialization completed successfully.");
         } catch (IOException e) {
-            logger.error("Failed to load initial data: {}", e.getMessage(), e);
+            log.error("Failed to load initial data: {}", e.getMessage(), e);
             throw new RuntimeException("Data initialization failed", e);
         }
     }
 
-    private List<Trainee> loadTraineesFromJson(String filePath) throws IOException {
+    private <T> List<T> loadDataFromJson(String filePath, TypeReference<List<T>> typeReference) throws IOException {
         return objectMapper.readValue(
                 getClass().getClassLoader().getResourceAsStream(filePath.replace("classpath:", "")),
-                new TypeReference<>() {
-                }
-        );
-    }
-
-    private List<Trainer> loadTrainersFromJson(String filePath) throws IOException {
-        return objectMapper.readValue(
-                getClass().getClassLoader().getResourceAsStream(filePath.replace("classpath:", "")),
-                new TypeReference<>() {
-                }
-        );
-    }
-
-    private List<Training> loadTrainingsFromJson(String filePath) throws IOException {
-        return objectMapper.readValue(
-                getClass().getClassLoader().getResourceAsStream(filePath.replace("classpath:", "")),
-                new TypeReference<>() {
-                }
+                typeReference
         );
     }
 }

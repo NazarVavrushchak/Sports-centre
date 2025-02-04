@@ -22,7 +22,7 @@ class UserDaoTest {
     }
 
     @Test
-    void createUser() {
+    void create() {
         User user = new User("John", "Doe", "john.doe", "password123", true);
         userDao.create(user);
 
@@ -42,7 +42,7 @@ class UserDaoTest {
     }
 
     @Test
-    void updateUser() {
+    void update() {
         User user = new User("Nazar", "Vavrushchak", "nazar.vavrushchak", "oldPass", true);
         userDao.create(user);
 
@@ -57,7 +57,7 @@ class UserDaoTest {
     }
 
     @Test
-    void deleteUser() {
+    void delete() {
         User user = new User("Stepan", "Giga", "stepan.giga", "pass123", true);
         userDao.create(user);
 
@@ -68,7 +68,7 @@ class UserDaoTest {
     }
 
     @Test
-    void findAllUsers() {
+    void findAll() {
         User user1 = new User("Charlie", "Green", "charlie.green", "pass1", true);
         User user2 = new User("Diana", "Black", "diana.black", "pass2", true);
         userDao.create(user1);

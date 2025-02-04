@@ -3,21 +3,17 @@ package sports.center.com.serviceImpl;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.mockito.InjectMocks;
-import org.mockito.Mock;
-import org.mockito.Mockito;
-import org.mockito.MockitoAnnotations;
+import org.mockito.*;
 import sports.center.com.dao.GenericDao;
 import sports.center.com.model.Trainer;
 import sports.center.com.service.impl.TrainerServiceImpl;
 import sports.center.com.util.PasswordUtil;
 import sports.center.com.util.UsernameUtil;
 
-import java.util.List;
-import java.util.Optional;
+import java.util.*;
+import java.util.stream.Collectors;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 class TrainerServiceImplTest {
@@ -40,22 +36,23 @@ class TrainerServiceImplTest {
 
     @Test
     void create() {
-        Trainer trainer = new Trainer();
-        trainer.setFirstName("Jane");
-        trainer.setLastName("Smith");
+        Trainer trainer = new Trainer("Jane", "Smith", null, null, true, "Fitness");
 
-        Mockito.mockStatic(UsernameUtil.class);
-        Mockito.mockStatic(PasswordUtil.class);
+        try (MockedStatic<UsernameUtil> mockedUsernameUtil = Mockito.mockStatic(UsernameUtil.class);
+             MockedStatic<PasswordUtil> mockedPasswordUtil = Mockito.mockStatic(PasswordUtil.class)) {
 
-        when(trainerDao.findAll()).thenReturn(List.of());
-        when(UsernameUtil.generateUsername(anyString(), anyString(), eq(trainerDao))).thenReturn("jane.smith");
-        when(PasswordUtil.generatePassword()).thenReturn("securePassword123");
+            when(UsernameUtil.generateUsername(eq("Jane"), eq("Smith"), any())).thenReturn("jane.smith");
+            when(PasswordUtil.generatePassword()).thenReturn("securePassword");
 
-        trainerService.create(trainer);
+            trainerService.create(trainer);
 
-        assertEquals("jane.smith", trainer.getUsername());
-        assertEquals("securePassword123", trainer.getPassword());
-        verify(trainerDao, times(1)).create(trainer);
+            ArgumentCaptor<Trainer> trainerCaptor = ArgumentCaptor.forClass(Trainer.class);
+            verify(trainerDao).create(trainerCaptor.capture());
+
+            Trainer capturedTrainer = trainerCaptor.getValue();
+            assertEquals("jane.smith", capturedTrainer.getUsername());
+            assertEquals("securePassword", capturedTrainer.getPassword());
+        }
     }
 
     @Test
@@ -108,11 +105,22 @@ class TrainerServiceImplTest {
     }
 
     @Test
-    void deleteTrainer() {
+    void delete() {
         long trainerId = 1L;
 
-        trainerService.deleteTrainer(trainerId);
+        trainerService.delete(trainerId);
 
         verify(trainerDao, times(1)).delete(trainerId);
+    }
+
+    @Test
+    void deleteNonExistentTrainerThrowsException() {
+        long nonexistentId = 999L;
+        doThrow(new NoSuchElementException("Trainer not found with ID: " + nonexistentId)).when(trainerDao).delete(nonexistentId);
+
+        Exception exception = assertThrows(NoSuchElementException.class, () -> trainerService.delete(nonexistentId));
+
+        assertEquals("Trainer not found with ID: " + nonexistentId, exception.getMessage());
+        verify(trainerDao, times(1)).delete(nonexistentId);
     }
 }

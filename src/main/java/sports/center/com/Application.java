@@ -15,6 +15,7 @@ import sports.center.com.util.UsernameUtil;
 
 import java.time.LocalDate;
 import java.util.Scanner;
+import java.util.Set;
 
 public class Application {
     private static final Logger logger = LoggerFactory.getLogger(Application.class);
@@ -101,7 +102,8 @@ public class Application {
         System.out.print("Enter Address: ");
         String address = scanner.nextLine();
 
-        String username = UsernameUtil.generateUsername(firstName, lastName, gymFacade.getTraineeDao());
+        Set<String> existingUsernames = gymFacade.getAllTraineeUsernames();
+        String username = UsernameUtil.generateUsername(firstName, lastName, existingUsernames);
         String password = PasswordUtil.generatePassword();
 
         Trainee trainee = new Trainee(firstName, lastName, username, password, true, dob, address);
@@ -116,7 +118,8 @@ public class Application {
         System.out.print("Enter Specialization: ");
         String specialization = scanner.nextLine();
 
-        String username = UsernameUtil.generateUsername(firstName, lastName, gymFacade.getTrainerDao());
+        Set<String> existingUsernames = gymFacade.getAllTrainerUsernames();
+        String username = UsernameUtil.generateUsername(firstName, lastName, existingUsernames);
         String password = PasswordUtil.generatePassword();
 
         Trainer trainer = new Trainer(firstName, lastName, username, password, true, specialization);
