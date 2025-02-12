@@ -1,27 +1,31 @@
 package sports.center.com.model;
 
+import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.ToString;
 
+@Entity
+@Table(name = "users")
 @Getter
 @Setter
 @ToString
 @NoArgsConstructor
+@Inheritance(strategy = InheritanceType.JOINED)
 public class User {
-    private long id;
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "user_id")
+    private Long id;
+    @Column(nullable = false)
     private String firstName;
+    @Column(nullable = false)
     private String lastName;
+    @Column(nullable = false)
     private String username;
+    @Column(nullable = false)
     private String password;
-    private boolean isActive;
-
-    public User(String firstName, String lastName, String username, String password, boolean isActive) {
-        this.firstName = firstName;
-        this.lastName = lastName;
-        this.username = username;
-        this.password = password;
-        this.isActive = isActive;
-    }
+    @Column(nullable = false)
+    private Boolean isActive;
 }

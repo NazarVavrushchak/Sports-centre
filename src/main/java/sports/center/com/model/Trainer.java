@@ -1,25 +1,37 @@
 package sports.center.com.model;
 
+import jakarta.persistence.*;
+import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.util.List;
+
+@Entity
+@Table(name = "trainers")
 @Getter
 @Setter
 @NoArgsConstructor
+@AllArgsConstructor
 public class Trainer extends User {
-    private String specialization;
+    @ManyToOne
+    @JoinColumn(name = "specialization_id", nullable = false)
+    private TrainingType specialization;
 
-    public Trainer(String firstName, String lastName, String username, String password, boolean isActive,
-                   String specialization) {
-        super(firstName, lastName, username, password, isActive);
+    @ManyToMany(mappedBy = "trainers")
+    private List<Trainee> trainees;
+
+    @OneToMany(mappedBy = "trainer", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<Training> trainings;
+
+    public Trainer(String firstName, String lastName, String username, String password, Boolean isActive, TrainingType specialization) {
+        super();
+        this.setFirstName(firstName);
+        this.setLastName(lastName);
+        this.setUsername(username);
+        this.setPassword(password);
+        this.setIsActive(isActive);
         this.specialization = specialization;
-    }
-
-    @Override
-    public String toString() {
-        return "Trainer{" +
-                "specialization='" + specialization + '\'' +
-                "} " + super.toString();
     }
 }
