@@ -4,12 +4,18 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.orm.jpa.JpaTransactionManager;
+import org.springframework.test.context.TestPropertySource;
 import sports.center.com.config.AppConfig;
 
 import javax.sql.DataSource;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+@TestPropertySource(properties = {
+        "DATASOURCE_URL=jdbc:postgresql://localhost:5432/Sports-Centre",
+        "DATASOURCE_USER=postgres",
+        "DATASOURCE_PASSWORD=postgres"
+})
 class AppConfigTest {
     private static AnnotationConfigApplicationContext context;
 

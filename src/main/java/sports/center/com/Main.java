@@ -1,5 +1,9 @@
 package sports.center.com;
 
+import jakarta.validation.ConstraintViolation;
+import jakarta.validation.Validation;
+import jakarta.validation.Validator;
+import jakarta.validation.ValidatorFactory;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import sports.center.com.config.AppConfig;
 import sports.center.com.dto.trainee.TraineeRequestDto;
@@ -14,12 +18,14 @@ import sports.center.com.service.TrainingService;
 
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
-import java.util.Date;
-import java.util.List;
-import java.util.Scanner;
+import java.util.*;
+import java.util.stream.Collectors;
 
 public class Main {
     private static final Scanner scanner = new Scanner(System.in);
+
+    private static final ValidatorFactory factory = Validation.buildDefaultValidatorFactory();
+    private static final Validator validator = factory.getValidator();
 
     public static void main(String[] args) {
         try (AnnotationConfigApplicationContext context = new AnnotationConfigApplicationContext(AppConfig.class)) {
@@ -86,94 +92,161 @@ public class Main {
     }
 
     private static void createTrainee(TraineeService traineeService) {
-        System.out.println("\nCreating new trainee...");
-        String firstName = getInput("First Name: ");
-        String lastName = getInput("Last Name: ");
-        Date dateOfBirth = getDateInput("Date of Birth (yyyy-MM-dd): ");
-        String address = getInput("Address: ");
+        while (true) {
+            System.out.println("\nCreating new trainee...");
+            String firstName = getInput("First Name: ");
+            String lastName = getInput("Last Name: ");
+            Date dateOfBirth = getDateInput("Date of Birth (yyyy-MM-dd): ");
+            String address = getInput("Address: ");
 
-        TraineeRequestDto request = new TraineeRequestDto(firstName, lastName, dateOfBirth, address);
-        TraineeResponseDto response = traineeService.createTrainee(request);
+            TraineeRequestDto request = new TraineeRequestDto(firstName, lastName, dateOfBirth, address);
 
-        System.out.println("\nTrainee created successfully!");
-        printTrainee(response);
+            Set<ConstraintViolation<TraineeRequestDto>> violations = validator.validate(request);
+
+            if (!violations.isEmpty()) {
+                System.out.println("\nValidation failed! Please correct the following errors:");
+                for (ConstraintViolation<TraineeRequestDto> violation : violations) {
+                    System.out.println("- " + violation.getMessage());
+                }
+                System.out.println("\nPlease enter valid data again.");
+            } else {
+                TraineeResponseDto response = traineeService.createTrainee(request);
+                System.out.println("\nTrainee created successfully!");
+                printTrainee(response);
+                break;
+            }
+        }
     }
 
     private static void getTrainee(TraineeService traineeService) {
-        System.out.println("\nFetching trainee profile...");
-        String username = getInput("Username: ");
-        String password = getInput("Password: ");
+        while (true) {
+            System.out.println("\nFetching trainee profile...");
+            String username = getInput("Username: ");
+            String password = getInput("Password: ");
 
-        try {
-            TraineeResponseDto trainee = traineeService.getTraineeByUsername(username, password);
-            printTrainee(trainee);
-        } catch (Exception e) {
-            System.out.println("\nError: " + e.getMessage());
+            try {
+                TraineeResponseDto trainee = traineeService.getTraineeByUsername(username, password);
+                printTrainee(trainee);
+                break;
+            } catch (Exception e) {
+                System.out.println("\nError: " + e.getMessage());
+                System.out.println("\nPlease enter valid data again.");
+            }
         }
     }
 
     private static void updateTrainee(TraineeService traineeService) {
-        System.out.println("\nUpdating trainee profile...");
-        String username = getInput("Username: ");
-        String password = getInput("Password: ");
+        while (true) {
+            System.out.println("\nUpdating trainee profile...");
+            String username = getInput("Username: ");
+            String password = getInput("Password: ");
 
-        String firstName = getInput("New First Name (or press Enter to skip): ");
-        String lastName = getInput("New Last Name (or press Enter to skip): ");
-        Date dateOfBirth = getDateInput("New Date of Birth (yyyy-MM-dd, or press Enter to skip): ");
-        String address = getInput("New Address (or press Enter to skip): ");
-        String newPassword = getInput("New Password (or press Enter to skip): ");
+            String firstName = getInput("New First Name : ");
+            String lastName = getInput("New Last Name : ");
+            Date dateOfBirth = getDateInput("New Date of Birth : ");
+            String address = getInput("New Address : ");
+            String newPassword = getInput("New Password : ");
 
-        TraineeRequestDto request = new TraineeRequestDto(
-                firstName.isEmpty() ? null : firstName,
-                lastName.isEmpty() ? null : lastName,
-                dateOfBirth,
-                address.isEmpty() ? null : address
-        );
+            TraineeRequestDto request = new TraineeRequestDto(
+                    firstName.isEmpty() ? null : firstName,
+                    lastName.isEmpty() ? null : lastName,
+                    dateOfBirth,
+                    address.isEmpty() ? null : address
+            );
 
-        boolean updated = traineeService.updateTrainee(username, password, request, newPassword.isEmpty() ? null : newPassword);
-        System.out.println(updated ? "\nProfile updated successfully!" : "\nFailed to update profile.");
+            Set<ConstraintViolation<TraineeRequestDto>> violations = validator.validate(request);
+            if (!violations.isEmpty()) {
+                System.out.println("\nValidation failed! Please correct the following errors:");
+                for (ConstraintViolation<TraineeRequestDto> violation : violations) {
+                    System.out.println("- " + violation.getMessage());
+                }
+                System.out.println("\nPlease enter valid data again.");
+            } else {
+                boolean updated = traineeService.updateTrainee(username, password, request, newPassword.isEmpty() ? null : newPassword);
+                System.out.println(updated ? "\nProfile updated successfully!" : "\nFailed to update profile.");
+                break;
+            }
+        }
     }
 
     private static void changeTraineePassword(TraineeService traineeService) {
-        System.out.println("\nChanging trainee password...");
-        String username = getInput("Username: ");
-        String oldPassword = getInput("Old Password: ");
-        String newPassword = getInput("New Password: ");
+        while (true) {
+            System.out.println("\nChanging trainee password...");
+            String username = getInput("Username: ");
+            String oldPassword = getInput("Old Password: ");
+            String newPassword = getInput("New Password: ");
 
-        boolean success = traineeService.changeTraineePassword(username, oldPassword, newPassword);
-        System.out.println(success ? "\nPassword changed successfully!" : "\nFailed to change password.");
+            if (newPassword.length() < 6) {
+                System.out.println("\nPassword must be at least 6 characters long.");
+            } else {
+                boolean success = traineeService.changeTraineePassword(username, oldPassword, newPassword);
+                System.out.println(success ? "\nPassword changed successfully!" : "\nFailed to change password.");
+                break;
+            }
+        }
     }
 
     private static void changeTraineeStatus(TraineeService traineeService) {
-        System.out.println("\nToggling trainee status...");
-        String username = getInput("Username: ");
-        String password = getInput("Password: ");
+        while (true) {
+            System.out.println("\nToggling trainee status...");
+            String username = getInput("Username: ");
+            String password = getInput("Password: ");
 
-        boolean isActive = traineeService.changeTraineeStatus(username, password);
-        System.out.println("\nTrainee status successfully changed! New status: " + (isActive ? "Active" : "Inactive"));
+            try {
+                boolean isActive = traineeService.changeTraineeStatus(username, password);
+                System.out.println("\nTrainee status successfully changed! New status: " + (isActive ? "Active" : "Inactive"));
+                break;
+            } catch (Exception e) {
+                System.out.println("\nError: " + e.getMessage());
+                System.out.println("\nPlease enter valid data again.");
+            }
+        }
     }
 
-
     private static void deleteTrainee(TraineeService traineeService) {
-        System.out.println("\nDeleting trainee...");
-        String username = getInput("Username: ");
-        String password = getInput("Password: ");
+        while (true) {
+            System.out.println("\nDeleting trainee...");
+            String username = getInput("Username: ");
+            String password = getInput("Password: ");
 
-        boolean success = traineeService.deleteTrainee(username, password);
-        System.out.println(success ? "\nTrainee deleted successfully!" : "\nFailed to delete trainee.");
+            try {
+                boolean success = traineeService.deleteTrainee(username, password);
+                System.out.println(success ? "\nTrainee deleted successfully!" : "\nFailed to delete trainee.");
+                break;
+            } catch (Exception e) {
+                System.out.println("\nError: " + e.getMessage());
+                System.out.println("\nPlease enter valid data again.");
+            }
+        }
     }
 
     private static void createTrainer(TrainerService trainerService) {
-        System.out.println("\nCreating new trainer...");
-        String firstName = getInput("First Name: ");
-        String lastName = getInput("Last Name: ");
-        Long specializationId = Long.parseLong(getInput("Specialization ID: "));
+        while (true) {
+            System.out.println("\nCreating new trainer...");
+            String firstName = getInput("First Name: ");
+            String lastName = getInput("Last Name: ");
+            String specializationIdStr = getInput("Specialization ID: ");
 
-        TrainerRequestDto request = new TrainerRequestDto(firstName, lastName, specializationId);
-        TrainerResponseDto response = trainerService.createTrainer(request);
+            try {
+                Long specializationId = Long.parseLong(specializationIdStr);
+                TrainerRequestDto request = new TrainerRequestDto(firstName, lastName, specializationId);
 
-        System.out.println("\nTrainer created successfully!");
-        printTrainer(response);
+                Set<ConstraintViolation<TrainerRequestDto>> violations = validator.validate(request);
+                if (!violations.isEmpty()) {
+                    System.out.println("\nValidation failed! Please correct the following errors:");
+                    for (ConstraintViolation<TrainerRequestDto> violation : violations) {
+                        System.out.println("- " + violation.getMessage());
+                    }
+                } else {
+                    TrainerResponseDto response = trainerService.createTrainer(request);
+                    System.out.println("\nTrainer created successfully!");
+                    printTrainer(response);
+                    break;
+                }
+            } catch (NumberFormatException e) {
+                System.out.println("\nError: Invalid specialization ID. Please enter a valid number.");
+            }
+        }
     }
 
     private static void getTrainer(TrainerService trainerService) {
@@ -189,57 +262,62 @@ public class Main {
         }
     }
 
-    private static void printTrainer(TrainerResponseDto trainer) {
-        System.out.println("\n----------------------------");
-        System.out.println("Trainer Profile");
-        System.out.println("----------------------------");
-        System.out.println("First Name: " + trainer.getFirstName());
-        System.out.println("Last Name: " + trainer.getLastName());
-        System.out.println("Username: " + trainer.getUsername());
-        System.out.println("Password: " + trainer.getPassword());
-        System.out.println("Active: " + (trainer.getIsActive() ? "Yes" : "No"));
-        System.out.println("Specialization ID: " + trainer.getSpecializationId());
-        System.out.println("----------------------------");
-    }
-
     private static void deleteTrainer(TrainerService trainerService) {
         System.out.println("\nDeleting trainer...");
         String username = getInput("Username: ");
         String password = getInput("Password: ");
 
-        boolean success = trainerService.deleteTrainer(username, password);
-        System.out.println(success ? "\nTrainer deleted successfully!" : "\nFailed to delete trainer.");
+        try {
+            boolean success = trainerService.deleteTrainer(username, password);
+            System.out.println(success ? "\nTrainer deleted successfully!" : "\nFailed to delete trainer.");
+        } catch (Exception e) {
+            System.out.println("\nError: " + e.getMessage());
+        }
     }
 
     private static void updateTrainer(TrainerService trainerService) {
         System.out.println("\nUpdating trainer profile...");
         String username = getInput("Username: ");
         String password = getInput("Password: ");
+        String firstName = getInput("New First Name : ");
+        String lastName = getInput("New Last Name : ");
+        String specializationIdStr = getInput("New Specialization ID : ");
+        String newPassword = getInput("New Password : ");
 
-        String firstName = getInput("New First Name (or press Enter to skip): ");
-        String lastName = getInput("New Last Name (or press Enter to skip): ");
-        String specializationIdStr = getInput("New Specialization ID (or press Enter to skip): ");
-        String newPassword = getInput("New Password (or press Enter to skip): ");
+        try {
+            Long specializationId = specializationIdStr.isEmpty() ? null : Long.parseLong(specializationIdStr);
+            TrainerRequestDto request = new TrainerRequestDto(
+                    firstName.isEmpty() ? null : firstName,
+                    lastName.isEmpty() ? null : lastName,
+                    specializationId
+            );
 
-        Long specializationId = specializationIdStr.isEmpty() ? null : Long.parseLong(specializationIdStr);
-
-        TrainerRequestDto request = new TrainerRequestDto(
-                firstName.isEmpty() ? null : firstName,
-                lastName.isEmpty() ? null : lastName,
-                specializationId
-        );
-
-        boolean updated = trainerService.updateTrainer(username, password, request, newPassword.isEmpty() ? null : newPassword);
-        System.out.println(updated ? "\nTrainer profile updated successfully!" : "\nFailed to update trainer profile.");
+            Set<ConstraintViolation<TrainerRequestDto>> violations = validator.validate(request);
+            if (!violations.isEmpty()) {
+                System.out.println("\nValidation failed! Please correct the following errors:");
+                for (ConstraintViolation<TrainerRequestDto> violation : violations) {
+                    System.out.println("- " + violation.getMessage());
+                }
+            } else {
+                boolean updated = trainerService.updateTrainer(username, password, request, newPassword.isEmpty() ? null : newPassword);
+                System.out.println(updated ? "\nTrainer profile updated successfully!" : "\nFailed to update trainer profile.");
+            }
+        } catch (NumberFormatException e) {
+            System.out.println("\nError: Invalid specialization ID. Please enter a valid number.");
+        }
     }
 
     private static void changeTrainerStatus(TrainerService trainerService) {
-        System.out.println("\nToggling traine status...");
+        System.out.println("\nToggling trainer status...");
         String username = getInput("Username: ");
         String password = getInput("Password: ");
 
-        boolean isActive = trainerService.changeTrainerStatus(username, password);
-        System.out.println("\nTrainee status successfully changed! New status: " + (isActive ? "Active" : "Inactive"));
+        try {
+            boolean isActive = trainerService.changeTrainerStatus(username, password);
+            System.out.println("\nTrainer status successfully changed! New status: " + (isActive ? "Active" : "Inactive"));
+        } catch (Exception e) {
+            System.out.println("\nError: " + e.getMessage());
+        }
     }
 
     private static void changeTrainerPassword(TrainerService trainerService) {
@@ -248,8 +326,148 @@ public class Main {
         String oldPassword = getInput("Old Password: ");
         String newPassword = getInput("New Password: ");
 
-        boolean success = trainerService.changeTrainerPassword(username, oldPassword, newPassword);
-        System.out.println(success ? "\nPassword changed successfully!" : "\nFailed to change password.");
+        try {
+            boolean success = trainerService.changeTrainerPassword(username, oldPassword, newPassword);
+            System.out.println(success ? "\nPassword changed successfully!" : "\nFailed to change password.");
+        } catch (Exception e) {
+            System.out.println("\nError: " + e.getMessage());
+        }
+    }
+
+    private static void addTraining(TrainingService trainingService) {
+        while (true) {
+            try {
+                System.out.println("\nAdding new training...");
+                Long traineeId = Long.parseLong(getInput("Trainee ID: "));
+                Long trainerId = Long.parseLong(getInput("Trainer ID: "));
+                Long trainingTypeId = Long.parseLong(getInput("Training Type ID: "));
+                String trainingName = getInput("Training Name: ");
+                Date trainingDate = getDateInput("Training Date (yyyy-MM-dd): ");
+                int trainingDuration = Integer.parseInt(getInput("Training Duration (minutes): "));
+
+                TrainingRequestDto request = new TrainingRequestDto(traineeId, trainerId, trainingTypeId, trainingName, trainingDate, trainingDuration);
+                Set<ConstraintViolation<TrainingRequestDto>> violations = validator.validate(request);
+
+                if (!violations.isEmpty()) {
+                    System.out.println("\nValidation failed! Please correct the following errors:");
+                    for (ConstraintViolation<TrainingRequestDto> violation : violations) {
+                        System.out.println("- " + violation.getMessage());
+                    }
+                } else {
+                    TrainingResponseDto response = trainingService.addTraining(request);
+                    System.out.println("\nTraining added successfully: " + response.getTrainingName());
+                    break;
+                }
+            } catch (Exception e) {
+                System.out.println("Error: " + e.getMessage());
+            }
+        }
+    }
+
+    private static void getTrainerTrainings(TrainingService trainingService) {
+        try {
+            System.out.println("\nFetching trainer trainings...");
+            String username = getInput("Trainer Username: ");
+            String password = getInput("Password: ");
+            Date fromDate = getDateInput("From Date (yyyy-MM-dd): ");
+            Date toDate = getDateInput("To Date (yyyy-MM-dd): ");
+            String traineeName = getInput("Trainee Name (or press Enter to skip): ");
+
+            List<TrainingResponseDto> trainings = trainingService.getTrainerTrainings(username, password, fromDate, toDate, traineeName);
+            if (trainings.isEmpty()) {
+                System.out.println("No trainings found for this trainer.");
+            } else {
+                trainings.forEach(training -> System.out.println(
+                        "\n--- Training Details ---" +
+                                "\nTraining Name: " + training.getTrainingName() +
+                                "\nTraining Type: " + training.getTrainingType() +
+                                "\nTrainee: " + training.getTraineeName() +
+                                "\nTrainer: " + training.getTrainerName() +
+                                "\nDate: " + new SimpleDateFormat("yyyy-MM-dd").format(training.getTrainingDate()) +
+                                "\nDuration: " + training.getTrainingDuration() + " minutes"
+                ));
+            }
+        } catch (Exception e) {
+            System.out.println("Error: " + e.getMessage());
+        }
+    }
+
+    private static void getTraineeTrainings(TrainingService trainingService) {
+        try {
+            System.out.println("\nFetching trainee trainings...");
+            String username = getInput("Trainee Username: ");
+            String password = getInput("Password: ");
+            Date fromDate = getDateInput("From Date (yyyy-MM-dd): ");
+            Date toDate = getDateInput("To Date (yyyy-MM-dd): ");
+            String trainerName = getInput("Trainer Name (or press Enter to skip): ");
+            String trainingType = getInput("Training Type (or press Enter to skip): ");
+
+            List<TrainingResponseDto> trainings = trainingService.getTraineeTrainings(username, password, fromDate, toDate, trainerName, trainingType);
+            if (trainings.isEmpty()) {
+                System.out.println("No trainings found for this trainee.");
+            } else {
+                trainings.forEach(training -> System.out.println(
+                        "\n--- Training Details ---" +
+                                "\nTraining Name: " + training.getTrainingName() +
+                                "\nTraining Type: " + training.getTrainingType() +
+                                "\nTrainee: " + training.getTraineeName() +
+                                "\nTrainer: " + training.getTrainerName() +
+                                "\nDate: " + new SimpleDateFormat("yyyy-MM-dd").format(training.getTrainingDate()) +
+                                "\nDuration: " + training.getTrainingDuration() + " minutes"
+                ));
+            }
+        } catch (Exception e) {
+            System.out.println("Error: " + e.getMessage());
+        }
+    }
+
+    private static void updateTraineeTrainers(TrainingService trainingService) {
+        try {
+            System.out.println("\nUpdating trainee's trainers...");
+            String traineeUsername = getInput("Trainee Username: ");
+            String password = getInput("Password: ");
+            String trainersInput = getInput("Enter Trainer Usernames (comma-separated): ");
+            List<String> trainerUsernames = Arrays.stream(trainersInput.split(","))
+                    .map(String::trim)
+                    .filter(s -> !s.isEmpty())
+                    .collect(Collectors.toList());
+
+            if (trainerUsernames.isEmpty()) {
+                System.out.println("\nNo valid trainer usernames provided.");
+                return;
+            }
+
+            List<TrainerResponseDto> updatedTrainers = trainingService.updateTraineeTrainers(traineeUsername, password, trainerUsernames);
+            updatedTrainers.forEach(trainer -> System.out.println("\nTrainer Updated: " + trainer.getUsername()));
+        } catch (Exception e) {
+            System.out.println("Error: " + e.getMessage());
+        }
+    }
+
+    private static void getUnassignedTrainers(TrainingService trainingService) {
+        System.out.println("\nFetching unassigned trainers...");
+        String traineeUsername = getInput("Trainee Username: ");
+        String password = getInput("Password: ");
+
+        try {
+            List<TrainerResponseDto> unassignedTrainers = trainingService.getUnassignedTrainers(traineeUsername, password);
+
+            if (unassignedTrainers.isEmpty()) {
+                System.out.println("\nNo unassigned trainers found.");
+            } else {
+                System.out.println("\nUnassigned Trainers:");
+                unassignedTrainers.forEach(trainer ->
+                        System.out.println("Trainer: " + trainer.getUsername())
+                );
+            }
+        } catch (Exception e) {
+            System.out.println("Error: " + e.getMessage());
+        }
+    }
+    
+    private static String getInput(String message) {
+        System.out.print(message);
+        return scanner.nextLine().trim();
     }
 
     private static void printTrainee(TraineeResponseDto trainee) {
@@ -266,95 +484,17 @@ public class Main {
         System.out.println("----------------------------");
     }
 
-    private static void addTraining(TrainingService trainingService) {
-        System.out.println("\nAdding new training...");
-        Long traineeId = Long.parseLong(getInput("Trainee ID: "));
-        Long trainerId = Long.parseLong(getInput("Trainer ID: "));
-        Long trainingTypeId = Long.parseLong(getInput("Training Type ID: "));
-        String trainingName = getInput("Training Name: ");
-        Date trainingDate = getDateInput("Training Date (yyyy-MM-dd): ");
-        int trainingDuration = Integer.parseInt(getInput("Training Duration (minutes): "));
-
-        TrainingRequestDto request = new TrainingRequestDto(traineeId, trainerId, trainingTypeId, trainingName, trainingDate, trainingDuration);
-        TrainingResponseDto response = trainingService.addTraining(request);
-
-        System.out.println("\nTraining added successfully: " + response.getTrainingName());
-    }
-
-    private static void getTrainerTrainings(TrainingService trainingService) {
-        System.out.println("\nFetching trainer trainings...");
-        String username = getInput("Trainer Username: ");
-        String password = getInput("Password: ");
-        Date fromDate = getDateInput("From Date (yyyy-MM-dd): ");
-        Date toDate = getDateInput("To Date (yyyy-MM-dd): ");
-        String traineeName = getInput("Trainee Name (or press Enter to skip): ");
-
-        List<TrainingResponseDto> trainings = trainingService.getTrainerTrainings(username, password, fromDate, toDate, traineeName);
-
-        if (trainings.isEmpty()) {
-            System.out.println("No trainings found for this trainer.");
-        } else {
-            trainings.forEach(training -> System.out.println(
-                    "\n--- Training Details ---" +
-                            "\nTraining Name: " + training.getTrainingName() +
-                            "\nTraining Type: " + training.getTrainingType() +
-                            "\nTrainee: " + training.getTraineeName() +
-                            "\nTrainer: " + training.getTrainerName() +
-                            "\nDate: " + new SimpleDateFormat("yyyy-MM-dd").format(training.getTrainingDate()) +
-                            "\nDuration: " + training.getTrainingDuration() + " minutes"
-            ));
-        }
-    }
-
-    private static void getTraineeTrainings(TrainingService trainingService) {
-        System.out.println("\nFetching trainee trainings...");
-        String username = getInput("Trainee Username: ");
-        String password = getInput("Password: ");
-        Date fromDate = getDateInput("From Date (yyyy-MM-dd): ");
-        Date toDate = getDateInput("To Date (yyyy-MM-dd): ");
-        String trainerName = getInput("Trainer Name (or press Enter to skip): ");
-        String trainingType = getInput("Training Type (or press Enter to skip): ");
-
-        List<TrainingResponseDto> trainings = trainingService.getTraineeTrainings(username, password, fromDate, toDate, trainerName, trainingType);
-
-        if (trainings.isEmpty()) {
-            System.out.println("No trainings found for this trainee.");
-        } else {
-            trainings.forEach(training -> System.out.println(
-                    "\n--- Training Details ---" +
-                            "\nTraining Name: " + training.getTrainingName() +
-                            "\nTraining Type: " + training.getTrainingType() +
-                            "\nTrainee: " + training.getTraineeName() +
-                            "\nTrainer: " + training.getTrainerName() +
-                            "\nDate: " + new SimpleDateFormat("yyyy-MM-dd").format(training.getTrainingDate()) +
-                            "\nDuration: " + training.getTrainingDuration() + " minutes"
-            ));
-        }
-    }
-
-    private static void getUnassignedTrainers(TrainingService trainingService) {
-        System.out.println("\nFetching unassigned trainers...");
-        String username = getInput("Trainee Username: ");
-        String password = getInput("Password: ");
-
-        List<TrainerResponseDto> trainers = trainingService.getUnassignedTrainers(username, password);
-        trainers.forEach(trainer -> System.out.println("\nTrainer: " + trainer.getFirstName() + " " + trainer.getLastName()));
-    }
-
-    private static void updateTraineeTrainers(TrainingService trainingService) {
-        System.out.println("\nUpdating trainee's trainers...");
-        String username = getInput("Trainee Username: ");
-        String password = getInput("Password: ");
-        System.out.println("Enter Trainer Usernames (comma-separated): ");
-        List<String> trainerUsernames = List.of(scanner.nextLine().split(","));
-
-        List<TrainerResponseDto> trainers = trainingService.updateTraineeTrainers(username, password, trainerUsernames);
-        trainers.forEach(trainer -> System.out.println("\nTrainer Updated: " + trainer.getFirstName() + " " + trainer.getLastName()));
-    }
-
-    private static String getInput(String message) {
-        System.out.print(message);
-        return scanner.nextLine().trim();
+    private static void printTrainer(TrainerResponseDto trainer) {
+        System.out.println("\n----------------------------");
+        System.out.println("Trainer Profile");
+        System.out.println("----------------------------");
+        System.out.println("First Name: " + trainer.getFirstName());
+        System.out.println("Last Name: " + trainer.getLastName());
+        System.out.println("Username: " + trainer.getUsername());
+        System.out.println("Password: " + trainer.getPassword());
+        System.out.println("Active: " + (trainer.getIsActive() ? "Yes" : "No"));
+        System.out.println("Specialization ID: " + trainer.getSpecializationId());
+        System.out.println("----------------------------");
     }
 
     private static Date getDateInput(String message) {

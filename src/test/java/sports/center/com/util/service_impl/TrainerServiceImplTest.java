@@ -121,26 +121,24 @@ class TrainerServiceImplTest {
         when(authService.authenticateTrainer("john.doe", "oldPass")).thenReturn(true);
         when(trainerRepository.findByUsername("john.doe")).thenReturn(Optional.of(trainer));
 
-        // Пароль виправлено (тепер 13 символів)
-        boolean result = trainerService.changeTrainerPassword("john.doe", "oldPass", "newPassword123");
+        boolean result = trainerService.changeTrainerPassword("john.doe", "oldPass", "newPasswor");
 
         assertTrue(result);
-        assertEquals("newPassword123", trainer.getPassword());
+        assertEquals("newPasswor", trainer.getPassword());
         verify(trainerRepository, times(1)).save(trainer);
     }
 
     @Test
     void updateTrainer() {
         when(validator.validate(any())).thenReturn(Set.of());
-        when(authService.authenticateTrainer("john.doe", "password123")).thenReturn(true);
+        when(authService.authenticateTrainer("john.doe", "password12")).thenReturn(true);
         when(trainerRepository.findByUsername("john.doe")).thenReturn(Optional.of(trainer));
         when(trainingTypeRepository.findById(1L)).thenReturn(Optional.of(trainingType));
 
-        // Пароль виправлено (тепер 13 символів)
-        boolean result = trainerService.updateTrainer("john.doe", "password123", trainerRequest, "newPassword123");
+        boolean result = trainerService.updateTrainer("john.doe", "password12", trainerRequest, "newPasswor");
 
         assertTrue(result);
-        assertEquals("newPassword123", trainer.getPassword());
+        assertEquals("newPasswor", trainer.getPassword());
         assertEquals("John", trainer.getFirstName());
         assertEquals("Doe", trainer.getLastName());
         verify(trainerRepository, times(1)).save(trainer);

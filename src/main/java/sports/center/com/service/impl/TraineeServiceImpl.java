@@ -169,8 +169,8 @@ public class TraineeServiceImpl implements TraineeService {
         if (password == null || password.trim().isEmpty()) {
             throw new IllegalArgumentException("New password cannot be empty.");
         }
-        if (password.length() < 10) {
-            throw new IllegalArgumentException("Password must be at least 10 characters long.");
+        if (password.length() != 10) {
+            throw new IllegalArgumentException("Password must be exactly 10 characters long.");
         }
     }
 

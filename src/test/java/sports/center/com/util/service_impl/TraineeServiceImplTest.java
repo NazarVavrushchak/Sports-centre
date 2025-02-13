@@ -51,7 +51,7 @@ class TraineeServiceImplTest {
         trainee.setFirstName("John");
         trainee.setLastName("Doe");
         trainee.setUsername("john.doe");
-        trainee.setPassword("password123");
+        trainee.setPassword("password12");
         trainee.setIsActive(true);
         trainee.setDateOfBirth(new Date());
         trainee.setAddress("123 Main St");
@@ -111,13 +111,13 @@ class TraineeServiceImplTest {
 
     @Test
     void changeTraineePassword() {
-        when(authService.authenticateTrainee("john.doe", "password123")).thenReturn(true);
+        when(authService.authenticateTrainee("john.doe", "password12")).thenReturn(true);
         when(traineeRepository.findByUsername("john.doe")).thenReturn(Optional.of(trainee));
 
-        boolean result = traineeService.changeTraineePassword("john.doe", "password123", "newPassword");
+        boolean result = traineeService.changeTraineePassword("john.doe", "password12", "newPass123");
 
         assertTrue(result);
-        assertEquals("newPassword", trainee.getPassword());
+        assertEquals("newPass123", trainee.getPassword());
         verify(traineeRepository, times(1)).save(trainee);
     }
 
@@ -129,10 +129,10 @@ class TraineeServiceImplTest {
         when(traineeRepository.findByUsername("john.doe")).thenReturn(Optional.of(trainee));
         when(usernameUtil.generateUsername("John", "Doe")).thenReturn("john.doe");
 
-        boolean result = traineeService.updateTrainee("john.doe", "password12", traineeRequest, "newPassword123");
+        boolean result = traineeService.updateTrainee("john.doe", "password12", traineeRequest, "newPasswor");
 
         assertTrue(result);
-        assertEquals("newPassword123", trainee.getPassword());
+        assertEquals("newPasswor", trainee.getPassword());
         assertEquals("John", trainee.getFirstName());
         assertEquals("Doe", trainee.getLastName());
         verify(traineeRepository, times(1)).save(trainee);

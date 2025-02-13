@@ -17,12 +17,12 @@ public interface TrainerRepository extends JpaRepository<Trainer, Long> {
     List<Trainer> findTrainersByTraineeUsername(@Param("traineeUsername") String traineeUsername);
 
     @Query("""
-            SELECT t FROM Trainer t
-            WHERE t.id NOT IN (
-                SELECT assignedTrainers.id FROM Trainee tr
-                JOIN tr.trainers assignedTrainers
-                WHERE tr.username = :traineeUsername
-            )
+                SELECT t FROM Trainer t
+                WHERE t.id NOT IN (
+                    SELECT assignedTrainers.id FROM Trainee tr
+                    JOIN tr.trainers assignedTrainers
+                    WHERE tr.username = :traineeUsername
+                )
             """)
     List<Trainer> findUnassignedTrainers(@Param("traineeUsername") String traineeUsername);
 

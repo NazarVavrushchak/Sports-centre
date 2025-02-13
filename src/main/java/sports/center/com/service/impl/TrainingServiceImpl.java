@@ -20,9 +20,7 @@ import sports.center.com.repository.TrainingTypeRepository;
 import sports.center.com.service.AuthService;
 import sports.center.com.service.TrainingService;
 
-import java.util.Date;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
@@ -100,6 +98,10 @@ public class TrainingServiceImpl implements TrainingService {
 
         List<Trainer> unassignedTrainers = trainerRepository.findUnassignedTrainers(traineeUsername);
 
+        log.info("Unassigned trainers: {}", unassignedTrainers.stream()
+                .map(Trainer::getUsername)
+                .collect(Collectors.joining(", ")));
+
         return unassignedTrainers.stream()
                 .map(trainer -> new TrainerResponseDto(
                         trainer.getFirstName(),
@@ -111,21 +113,29 @@ public class TrainingServiceImpl implements TrainingService {
                 .collect(Collectors.toList());
     }
 
-    @Override
-    public List<TrainerResponseDto> updateTraineeTrainers(String traineeUsername,String password ,List<String> trainerUsernames) {
+    public List<TrainerResponseDto> updateTraineeTrainers(String traineeUsername, String password, List<String> trainerUsernames) {
         authenticateTraineeOrThrow(traineeUsername, password);
         log.info("Updating trainers for Trainee: {}", traineeUsername);
 
         Trainee trainee = traineeRepository.findByUsername(traineeUsername)
                 .orElseThrow(() -> new IllegalArgumentException("Trainee not found with username: " + traineeUsername));
 
-        List<Trainer> trainers = trainerRepository.findByUsernameIn(trainerUsernames);
-        trainee.setTrainers(trainers);
+        Set<Trainer> currentTrainers = new HashSet<>(trainee.getTrainers());
+
+        List<Trainer> newTrainers = trainerRepository.findByUsernameIn(trainerUsernames);
+
+        if (newTrainers.size() != trainerUsernames.size()) {
+            throw new IllegalArgumentException("Some trainers were not found in the database!");
+        }
+
+        currentTrainers.addAll(newTrainers);
+
+        trainee.setTrainers(new ArrayList<>(currentTrainers));
 
         traineeRepository.save(trainee);
         log.info("Updated trainers list for Trainee: {}", traineeUsername);
 
-        return trainers.stream()
+        return currentTrainers.stream()
                 .map(trainer -> new TrainerResponseDto(
                         trainer.getFirstName(),
                         trainer.getLastName(),
@@ -165,8 +175,8 @@ public class TrainingServiceImpl implements TrainingService {
         }
     }
 
-    private void authenticateTrainerOrThrow(String username , String password){
-        if(!authService.authenticateTrainer(username , password)){
+    private void authenticateTrainerOrThrow(String username, String password) {
+        if (!authService.authenticateTrainer(username, password)) {
             log.warn("Authentication failed for {}", username);
             throw new SecurityException("Invalid username or password.");
         }
