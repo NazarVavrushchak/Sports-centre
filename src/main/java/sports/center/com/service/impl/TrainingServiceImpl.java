@@ -4,6 +4,7 @@ import jakarta.validation.ConstraintViolation;
 import jakarta.validation.Validator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import sports.center.com.dto.trainer.TrainerResponseDto;
@@ -42,21 +43,33 @@ public class TrainingServiceImpl implements TrainingService {
 
         validateTrainingRequest(request);
 
-        Trainee trainee = traineeRepository.findById(request.getTraineeId())
-                .orElseThrow(() -> new IllegalArgumentException("Trainee not found with ID: " + request.getTraineeId()));
+        Trainee trainee = getEntityByIdOrThrow(traineeRepository, request.getTraineeId(), "Trainee");
+        Trainer trainer = getEntityByIdOrThrow(trainerRepository, request.getTrainerId(), "Trainer");
+        TrainingType trainingType = getEntityByIdOrThrow(trainingTypeRepository, request.getTrainingTypeId(), "Training Type");
 
-        Trainer trainer = trainerRepository.findById(request.getTrainerId())
-                .orElseThrow(() -> new IllegalArgumentException("Trainer not found with ID: " + request.getTrainerId()));
+        assignTrainer(trainee, trainer);
 
-        TrainingType trainingType = trainingTypeRepository.findById(request.getTrainingTypeId())
-                .orElseThrow(() -> new IllegalArgumentException("Training Type not found with ID: " + request.getTrainingTypeId()));
+        Training training = createTraining(trainee, trainer, trainingType, request);
+        trainingRepository.save(training);
 
+        log.info("Training created successfully: {}", training.getTrainingName());
+        return mapToResponse(training);
+    }
+
+    private <T> T getEntityByIdOrThrow(JpaRepository<T, Long> repository, Long id, String entityName) {
+        return repository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException(entityName + " not found with ID: " + id));
+    }
+
+    private void assignTrainer(Trainee trainee, Trainer trainer) {
         if (!trainee.getTrainers().contains(trainer)) {
             trainee.getTrainers().add(trainer);
             traineeRepository.save(trainee);
             log.info("Trainer {} assigned to trainee {}", trainer.getUsername(), trainee.getUsername());
         }
+    }
 
+    private Training createTraining(Trainee trainee, Trainer trainer, TrainingType trainingType, TrainingRequestDto request) {
         Training training = new Training();
         training.setTrainee(trainee);
         training.setTrainer(trainer);
@@ -64,11 +77,7 @@ public class TrainingServiceImpl implements TrainingService {
         training.setTrainingName(request.getTrainingName());
         training.setTrainingDate(request.getTrainingDate());
         training.setTrainingDuration(request.getTrainingDuration());
-
-        trainingRepository.save(training);
-        log.info("Training created successfully: {}", training.getTrainingName());
-
-        return mapToResponse(training);
+        return training;
     }
 
     @Override
@@ -113,29 +122,43 @@ public class TrainingServiceImpl implements TrainingService {
                 .collect(Collectors.toList());
     }
 
+    @Override
     public List<TrainerResponseDto> updateTraineeTrainers(String traineeUsername, String password, List<String> trainerUsernames) {
         authenticateTraineeOrThrow(traineeUsername, password);
         log.info("Updating trainers for Trainee: {}", traineeUsername);
 
-        Trainee trainee = traineeRepository.findByUsername(traineeUsername)
-                .orElseThrow(() -> new IllegalArgumentException("Trainee not found with username: " + traineeUsername));
+        Trainee trainee = getTraineeOrThrow(traineeUsername);
+        List<Trainer> validTrainers = getValidTrainersOrThrow(trainerUsernames);
 
-        Set<Trainer> currentTrainers = new HashSet<>(trainee.getTrainers());
+        updateTraineeTrainerList(trainee, validTrainers);
 
-        List<Trainer> newTrainers = trainerRepository.findByUsernameIn(trainerUsernames);
+        return mapTrainersToResponse(trainee.getTrainers());
+    }
 
-        if (newTrainers.size() != trainerUsernames.size()) {
+    private Trainee getTraineeOrThrow(String username) {
+        return traineeRepository.findByUsername(username)
+                .orElseThrow(() -> new IllegalArgumentException("Trainee not found with username: " + username));
+    }
+
+    private List<Trainer> getValidTrainersOrThrow(List<String> trainerUsernames) {
+        List<Trainer> trainers = trainerRepository.findByUsernameIn(trainerUsernames);
+        if (trainers.size() != trainerUsernames.size()) {
             throw new IllegalArgumentException("Some trainers were not found in the database!");
         }
+        return trainers;
+    }
 
-        currentTrainers.addAll(newTrainers);
-
-        trainee.setTrainers(new ArrayList<>(currentTrainers));
+    private void updateTraineeTrainerList(Trainee trainee, List<Trainer> newTrainers) {
+        Set<Trainer> updatedTrainers = new HashSet<>(trainee.getTrainers());
+        updatedTrainers.addAll(newTrainers);
+        trainee.setTrainers(new ArrayList<>(updatedTrainers));
 
         traineeRepository.save(trainee);
-        log.info("Updated trainers list for Trainee: {}", traineeUsername);
+        log.info("Updated trainers list for Trainee: {}", trainee.getUsername());
+    }
 
-        return currentTrainers.stream()
+    private List<TrainerResponseDto> mapTrainersToResponse(List<Trainer> trainers) {
+        return trainers.stream()
                 .map(trainer -> new TrainerResponseDto(
                         trainer.getFirstName(),
                         trainer.getLastName(),

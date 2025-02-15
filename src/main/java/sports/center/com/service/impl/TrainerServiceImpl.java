@@ -17,6 +17,7 @@ import sports.center.com.service.TrainerService;
 import sports.center.com.util.PasswordUtil;
 import sports.center.com.util.UsernameUtil;
 
+import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -96,18 +97,10 @@ public class TrainerServiceImpl implements TrainerService {
         authenticateOrThrow(username, password);
 
         Trainer trainer = getTrainerOrThrow(username);
+        TrainingType specialization = getSpecializationOrThrow(request.getSpecializationId());
 
-        TrainingType specialization = trainingTypeRepository.findById(request.getSpecializationId())
-                .orElseThrow(() -> new IllegalArgumentException("Specialization not found"));
-
-        if (newPassword != null && !newPassword.isEmpty()) {
-            validatePassword(newPassword);
-            trainer.setPassword(newPassword);
-        }
-
-        if (!trainer.getFirstName().equals(request.getFirstName())) {
-            trainer.setUsername(usernameUtil.generateUsername(request.getFirstName(), request.getLastName()));
-        }
+        updatePasswordIfProvided(trainer, newPassword);
+        updateUsernameIfChanged(trainer, request);
 
         trainer.setFirstName(request.getFirstName());
         trainer.setLastName(request.getLastName());
@@ -116,6 +109,26 @@ public class TrainerServiceImpl implements TrainerService {
         trainerRepository.save(trainer);
         log.info("Trainer profile updated: {}", username);
         return true;
+    }
+
+    private TrainingType getSpecializationOrThrow(Long specializationId) {
+        return trainingTypeRepository.findById(specializationId)
+                .orElseThrow(() -> new IllegalArgumentException("Specialization not found"));
+    }
+
+    private void updatePasswordIfProvided(Trainer trainer, String newPassword) {
+        Optional.ofNullable(newPassword)
+                .filter(pwd -> !pwd.isEmpty())
+                .ifPresent(pwd -> {
+                    validatePassword(pwd);
+                    trainer.setPassword(pwd);
+                });
+    }
+
+    private void updateUsernameIfChanged(Trainer trainer, TrainerRequestDto request) {
+        if (!trainer.getFirstName().equals(request.getFirstName())) {
+            trainer.setUsername(usernameUtil.generateUsername(request.getFirstName(), request.getLastName()));
+        }
     }
 
     @Override

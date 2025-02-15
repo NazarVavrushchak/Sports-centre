@@ -15,6 +15,7 @@ import sports.center.com.service.TraineeService;
 import sports.center.com.util.PasswordUtil;
 import sports.center.com.util.UsernameUtil;
 
+import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -94,24 +95,36 @@ public class TraineeServiceImpl implements TraineeService {
 
         Trainee trainee = getTraineeOrThrow(username);
 
-        if (!trainee.getFirstName().equals(request.getFirstName()) ||
-                !trainee.getLastName().equals(request.getLastName())) {
-            trainee.setUsername(usernameUtil.generateUsername(request.getFirstName(), request.getLastName()));
-        }
-
-        if (newPassword != null && !newPassword.isEmpty()) {
-            validatePassword(newPassword);
-            trainee.setPassword(newPassword);
-        }
-
-        trainee.setFirstName(request.getFirstName());
-        trainee.setLastName(request.getLastName());
-        trainee.setDateOfBirth(request.getDateOfBirth());
-        trainee.setAddress(request.getAddress());
+        updateUsernameIfChanged(trainee, request);
+        updatePasswordIfProvided(trainee, newPassword);
+        updateTraineeFields(trainee, request);
 
         traineeRepository.save(trainee);
         log.info("Trainee profile updated: {}", trainee.getUsername());
         return true;
+    }
+
+    private void updateUsernameIfChanged(Trainee trainee, TraineeRequestDto request) {
+        if (!trainee.getFirstName().equals(request.getFirstName()) ||
+                !trainee.getLastName().equals(request.getLastName())) {
+            trainee.setUsername(usernameUtil.generateUsername(request.getFirstName(), request.getLastName()));
+        }
+    }
+
+    private void updatePasswordIfProvided(Trainee trainee, String newPassword) {
+        Optional.ofNullable(newPassword)
+                .filter(pwd -> !pwd.isEmpty())
+                .ifPresent(pwd -> {
+                    validatePassword(pwd);
+                    trainee.setPassword(pwd);
+                });
+    }
+
+    private void updateTraineeFields(Trainee trainee, TraineeRequestDto request) {
+        trainee.setFirstName(request.getFirstName());
+        trainee.setLastName(request.getLastName());
+        trainee.setDateOfBirth(request.getDateOfBirth());
+        trainee.setAddress(request.getAddress());
     }
 
     @Override
