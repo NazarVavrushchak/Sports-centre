@@ -1,18 +1,20 @@
 package sports.center.com.service;
 
-import sports.center.com.model.Trainer;
-
-import java.util.List;
-import java.util.Optional;
+import sports.center.com.dto.trainer.TrainerRequestDto;
+import sports.center.com.dto.trainer.TrainerResponseDto;
 
 public interface TrainerService {
-    void create(Trainer trainer);
+    TrainerResponseDto createTrainer(TrainerRequestDto trainerRequestDto);
 
-    void update(long id, Trainer trainer);
+    boolean authenticateTrainer(String username, String password);
 
-    Optional<Trainer> getById(long id);
+    TrainerResponseDto getTrainerByUsername(String username, String password);
 
-    List<Trainer> getAll();
+    boolean changeTrainerPassword(String username, String oldPassword, String newPassword);
 
-    void delete(long id);
+    boolean updateTrainer(String username, String password, TrainerRequestDto request, String newPassword);
+
+    boolean changeTrainerStatus(String username, String password);
+
+    boolean deleteTrainer(String username, String password);
 }

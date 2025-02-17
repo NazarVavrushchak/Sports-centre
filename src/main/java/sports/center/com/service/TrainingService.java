@@ -1,14 +1,20 @@
 package sports.center.com.service;
 
-import sports.center.com.model.Training;
+import sports.center.com.dto.trainer.TrainerResponseDto;
+import sports.center.com.dto.training.TrainingRequestDto;
+import sports.center.com.dto.training.TrainingResponseDto;
 
+import java.util.Date;
 import java.util.List;
-import java.util.Optional;
 
 public interface TrainingService {
-    void create(Training training);
+    TrainingResponseDto addTraining(TrainingRequestDto trainingRequestDto);
 
-    Optional<Training> getById(long id);
+    List<TrainingResponseDto> getTraineeTrainings(String traineeUsername, String password, Date fromDate, Date toDate, String trainerName, String trainingType);
 
-    List<Training> getAll();
+    List<TrainingResponseDto> getTrainerTrainings(String trainerUsername, String password, Date fromDate, Date toDate, String traineeName);
+
+    List<TrainerResponseDto> getUnassignedTrainers(String traineeUsername, String password);
+
+    List<TrainerResponseDto> updateTraineeTrainers(String traineeUsername, String password, List<String> trainerUsernames);
 }

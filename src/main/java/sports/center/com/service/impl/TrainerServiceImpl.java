@@ -1,114 +1,201 @@
 package sports.center.com.service.impl;
 
+import jakarta.validation.ConstraintViolation;
+import jakarta.validation.Validator;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
-import sports.center.com.dao.GenericDao;
-import sports.center.com.model.Trainee;
+import org.springframework.transaction.annotation.Transactional;
+import sports.center.com.dto.trainer.TrainerRequestDto;
+import sports.center.com.dto.trainer.TrainerResponseDto;
 import sports.center.com.model.Trainer;
+import sports.center.com.model.TrainingType;
+import sports.center.com.repository.TrainerRepository;
+import sports.center.com.repository.TrainingTypeRepository;
+import sports.center.com.service.AuthService;
 import sports.center.com.service.TrainerService;
 import sports.center.com.util.PasswordUtil;
 import sports.center.com.util.UsernameUtil;
 
-import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 @Service
 @Slf4j
+@RequiredArgsConstructor
+@Transactional
 public class TrainerServiceImpl implements TrainerService {
 
-    private final GenericDao<Trainer> trainerDao;
-    private final GenericDao<Trainee> traineeDao;
-
-    @Autowired
-    public TrainerServiceImpl(GenericDao<Trainer> trainerDao, GenericDao<Trainee> traineeDao) {
-        this.trainerDao = trainerDao;
-        this.traineeDao = traineeDao;
-    }
+    private final TrainerRepository trainerRepository;
+    private final TrainingTypeRepository trainingTypeRepository;
+    private final UsernameUtil usernameUtil;
+    private final AuthService authService;
+    private final Validator validator;
 
     @Override
-    public void create(Trainer trainer) {
-        log.debug("Starting Trainer creation process. Input data: {}", trainer);
+    public TrainerResponseDto createTrainer(TrainerRequestDto trainerRequestDto) {
+        validateRequest(trainerRequestDto);
+        log.info("Creating new trainer: {} {}", trainerRequestDto.getFirstName(), trainerRequestDto.getLastName());
 
-        Set<String> existingUsernames = getAllUsernames();
-        String username = UsernameUtil.generateUsername(trainer.getFirstName(), trainer.getLastName(), existingUsernames);
+        String username = usernameUtil.generateUsername(trainerRequestDto.getFirstName(), trainerRequestDto.getLastName());
+        String password = PasswordUtil.generatePassword();
+
+        TrainingType specialization = trainingTypeRepository.findById(trainerRequestDto.getSpecializationId())
+                .orElseThrow(() -> new IllegalArgumentException("Specialization not found"));
+
+        Trainer trainer = new Trainer();
+        trainer.setFirstName(trainerRequestDto.getFirstName());
+        trainer.setLastName(trainerRequestDto.getLastName());
         trainer.setUsername(username);
+        trainer.setPassword(password);
+        trainer.setIsActive(true);
+        trainer.setSpecialization(specialization);
 
-        trainer.setPassword(PasswordUtil.generatePassword());
+        trainerRepository.save(trainer);
+        log.info("Trainer created successfully: {}", trainer.getUsername());
 
-        trainerDao.create(trainer);
-        log.info("Trainer successfully created with Username={} and ID={}", username, trainer.getId());
+        return mapToResponse(trainer);
     }
 
     @Override
-    public void update(long id, Trainer newTrainerData) {
-        log.debug("Updating Trainer with ID={}. New data: {}", id, newTrainerData);
-
-        Trainer existingTrainer = getTrainerOrThrow(id);
-        updateTrainerFields(existingTrainer, newTrainerData);
-
-        trainerDao.update(id, existingTrainer);
-        log.info("Trainer with ID={} successfully updated.", id);
+    public boolean authenticateTrainer(String username, String password) {
+        log.info("Authenticating trainer: {}", username);
+        boolean isAuthenticated = authService.authenticateTrainer(username, password);
+        log.info("Authentication result for {}: {}", username, isAuthenticated);
+        return isAuthenticated;
     }
 
-    private Trainer getTrainerOrThrow(long id) {
-        return getById(id).orElseThrow(() -> {
-            log.error("Trainer with ID={} not found.", id);
-            return new IllegalArgumentException("Trainer not found with ID: " + id);
-        });
+    @Override
+    public TrainerResponseDto getTrainerByUsername(String username, String password) {
+        log.info("Fetching trainer profile: {}", username);
+        authenticateOrThrow(username, password);
+
+        return trainerRepository.findByUsername(username)
+                .map(this::mapToResponse)
+                .orElseThrow(() -> new IllegalArgumentException("Trainer not found: " + username));
     }
 
-    private void updateTrainerFields(Trainer existingTrainer, Trainer newTrainerData) {
-        Optional.ofNullable(newTrainerData.getFirstName()).ifPresent(existingTrainer::setFirstName);
-        Optional.ofNullable(newTrainerData.getLastName()).ifPresent(existingTrainer::setLastName);
-        Optional.ofNullable(newTrainerData.getSpecialization()).ifPresent(existingTrainer::setSpecialization);
-        Optional.ofNullable(newTrainerData.getUsername())
-                .ifPresentOrElse(existingTrainer::setUsername,
-                        () -> existingTrainer.setUsername(generateOrUpdateUsername(existingTrainer, newTrainerData)));
+    @Override
+    public boolean changeTrainerPassword(String username, String oldPassword, String newPassword) {
+        log.info("Changing password for trainer: {}", username);
+        authenticateOrThrow(username, oldPassword);
+        validatePassword(newPassword);
 
-        Optional.ofNullable(newTrainerData.getPassword())
-                .ifPresentOrElse(existingTrainer::setPassword,
-                        () -> existingTrainer.setPassword(PasswordUtil.generatePassword()));
+        Trainer trainer = getTrainerOrThrow(username);
+        trainer.setPassword(newPassword);
+        trainerRepository.save(trainer);
 
-        existingTrainer.setActive(newTrainerData.isActive());
+        log.info("Password changed successfully for trainer: {}", username);
+        return true;
     }
 
-    private String generateOrUpdateUsername(Trainer existingTrainee, Trainer newTraineeData) {
-        Set<String> existingUsernames = getAllUsernames();
-        return UsernameUtil.generateUsername(
-                Optional.ofNullable(newTraineeData.getFirstName()).orElse(existingTrainee.getFirstName()),
-                Optional.ofNullable(newTraineeData.getLastName()).orElse(existingTrainee.getLastName()),
-                existingUsernames
+    @Override
+    public boolean updateTrainer(String username, String password, TrainerRequestDto request, String newPassword) {
+        validateRequest(request);
+        log.info("Updating trainer profile: {}", username);
+        authenticateOrThrow(username, password);
+
+        Trainer trainer = getTrainerOrThrow(username);
+        TrainingType specialization = getSpecializationOrThrow(request.getSpecializationId());
+
+        updatePasswordIfProvided(trainer, newPassword);
+        updateUsernameIfChanged(trainer, request);
+
+        trainer.setFirstName(request.getFirstName());
+        trainer.setLastName(request.getLastName());
+        trainer.setSpecialization(specialization);
+
+        trainerRepository.save(trainer);
+        log.info("Trainer profile updated: {}", username);
+        return true;
+    }
+
+    private TrainingType getSpecializationOrThrow(Long specializationId) {
+        return trainingTypeRepository.findById(specializationId)
+                .orElseThrow(() -> new IllegalArgumentException("Specialization not found"));
+    }
+
+    private void updatePasswordIfProvided(Trainer trainer, String newPassword) {
+        Optional.ofNullable(newPassword)
+                .filter(pwd -> !pwd.isEmpty())
+                .ifPresent(pwd -> {
+                    validatePassword(pwd);
+                    trainer.setPassword(pwd);
+                });
+    }
+
+    private void updateUsernameIfChanged(Trainer trainer, TrainerRequestDto request) {
+        if (!trainer.getFirstName().equals(request.getFirstName())) {
+            trainer.setUsername(usernameUtil.generateUsername(request.getFirstName(), request.getLastName()));
+        }
+    }
+
+    @Override
+    public boolean changeTrainerStatus(String username, String password) {
+        log.info("Changing trainer status: {}", username);
+        authenticateOrThrow(username, password);
+
+        Trainer trainer = getTrainerOrThrow(username);
+        trainer.setIsActive(!trainer.getIsActive());
+        trainerRepository.save(trainer);
+
+        log.info("Trainer status updated for {}: {}", username, trainer.getIsActive());
+        return trainer.getIsActive();
+    }
+
+    @Override
+    public boolean deleteTrainer(String username, String password) {
+        log.info("Deleting trainer: {}", username);
+        authenticateOrThrow(username, password);
+
+        Trainer trainer = getTrainerOrThrow(username);
+        trainerRepository.delete(trainer);
+
+        log.info("Trainer deleted successfully: {}", username);
+        return true;
+    }
+
+    private void authenticateOrThrow(String username, String password) {
+        if (!authService.authenticateTrainer(username, password)) {
+            log.warn("Authentication failed for {}", username);
+            throw new SecurityException("Invalid username or password.");
+        }
+    }
+
+    private Trainer getTrainerOrThrow(String username) {
+        return trainerRepository.findByUsername(username)
+                .orElseThrow(() -> new IllegalArgumentException("Trainer not found: " + username));
+    }
+
+    private void validateRequest(TrainerRequestDto request) {
+        Set<ConstraintViolation<TrainerRequestDto>> violations = validator.validate(request);
+        if (!violations.isEmpty()) {
+            String errors = violations.stream()
+                    .map(ConstraintViolation::getMessage)
+                    .collect(Collectors.joining(", "));
+            log.warn("Validation failed: {}", errors);
+            throw new IllegalArgumentException("Validation failed: " + errors);
+        }
+    }
+
+    private void validatePassword(String password) {
+        if (password == null || password.trim().isEmpty()) {
+            throw new IllegalArgumentException("New password cannot be empty.");
+        }
+        if (password.length() != 10) {
+            throw new IllegalArgumentException("Password must be exactly 10 characters long.");
+        }
+    }
+
+    private TrainerResponseDto mapToResponse(Trainer trainer) {
+        return new TrainerResponseDto(
+                trainer.getFirstName(),
+                trainer.getLastName(),
+                trainer.getUsername(),
+                trainer.getPassword(),
+                trainer.getIsActive(),
+                trainer.getSpecialization().getId()
         );
-    }
-
-    private Set<String> getAllUsernames() {
-        return Stream.concat(
-                trainerDao.findAll().stream().map(Trainer::getUsername),
-                traineeDao.findAll().stream().map(Trainee::getUsername)
-        ).collect(Collectors.toSet());
-    }
-
-    @Override
-    public Optional<Trainer> getById(long id) {
-        log.debug("Fetching Trainer with ID={}", id);
-        Optional<Trainer> trainer = trainerDao.findById(id);
-        log.info("Fetched Trainer: {}", trainer.orElse(null));
-        return trainer;
-    }
-
-    @Override
-    public List<Trainer> getAll() {
-        return trainerDao.findAll();
-    }
-
-    @Override
-    public void delete(long id) {
-        log.debug("Deleting Trainer with ID={}", id);
-        trainerDao.delete(id);
-        log.info("Trainer with ID={} successfully deleted.", id);
     }
 }

@@ -1,35 +1,34 @@
 package sports.center.com.model;
 
-import com.fasterxml.jackson.annotation.JsonAlias;
-import com.fasterxml.jackson.annotation.JsonProperty;
+import jakarta.persistence.*;
+import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-import java.time.LocalDate;
+import java.util.Date;
+import java.util.List;
 
+@Entity
+@Table(name = "trainees")
 @Getter
 @Setter
 @NoArgsConstructor
+@AllArgsConstructor
 public class Trainee extends User {
-    @JsonAlias("birthDate")
-    @JsonProperty("dateOfBirth")
-    private LocalDate dateOfBirth;
-    @JsonProperty("address")
+    @Column
+    private Date dateOfBirth;
+    @Column
     private String address;
 
-    public Trainee(String firstName, String lastName, String username, String password, boolean isActive,
-                   LocalDate dateOfBirth, String address) {
-        super(firstName, lastName, username, password, isActive);
-        this.dateOfBirth = dateOfBirth;
-        this.address = address;
-    }
+    @ManyToMany
+    @JoinTable(
+            name = "trainee_trainer",
+            joinColumns = @JoinColumn(name = "trainee_id"),
+            inverseJoinColumns = @JoinColumn(name = "trainer_id")
+    )
+    private List<Trainer> trainers;
 
-    @Override
-    public String toString() {
-        return "Trainee{" +
-                "dateOfBirth=" + dateOfBirth +
-                ", address='" + address + '\'' +
-                "} " + super.toString();
-    }
+    @OneToMany(mappedBy = "trainee", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<Training> trainings;
 }
