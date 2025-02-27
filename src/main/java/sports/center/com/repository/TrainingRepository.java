@@ -6,5 +6,4 @@ import sports.center.com.model.Training;
 
 @Repository
 public interface TrainingRepository extends JpaRepository<Training, Long>, TrainingRepositoryCustom {
-
 }

@@ -1,22 +1,27 @@
 package sports.center.com.service.impl;
 
-import jakarta.validation.ConstraintViolation;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Validator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.slf4j.MDC;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import sports.center.com.dto.trainee.TraineeResponseDto;
 import sports.center.com.dto.trainer.TrainerRequestDto;
 import sports.center.com.dto.trainer.TrainerResponseDto;
+import sports.center.com.exception.exceptions.*;
 import sports.center.com.model.Trainer;
 import sports.center.com.model.TrainingType;
 import sports.center.com.repository.TrainerRepository;
 import sports.center.com.repository.TrainingTypeRepository;
-import sports.center.com.service.AuthService;
 import sports.center.com.service.TrainerService;
 import sports.center.com.util.PasswordUtil;
 import sports.center.com.util.UsernameUtil;
 
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.Base64;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -26,23 +31,25 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 @Transactional
 public class TrainerServiceImpl implements TrainerService {
-
     private final TrainerRepository trainerRepository;
     private final TrainingTypeRepository trainingTypeRepository;
     private final UsernameUtil usernameUtil;
-    private final AuthService authService;
     private final Validator validator;
+    private final HttpServletRequest request;
 
     @Override
     public TrainerResponseDto createTrainer(TrainerRequestDto trainerRequestDto) {
+        String transactionId = MDC.get("transactionId");
         validateRequest(trainerRequestDto);
-        log.info("Creating new trainer: {} {}", trainerRequestDto.getFirstName(), trainerRequestDto.getLastName());
+        log.info("[{}] Creating new trainer: {} {}", transactionId, trainerRequestDto.getFirstName(), trainerRequestDto.getLastName());
 
         String username = usernameUtil.generateUsername(trainerRequestDto.getFirstName(), trainerRequestDto.getLastName());
         String password = PasswordUtil.generatePassword();
 
-        TrainingType specialization = trainingTypeRepository.findById(trainerRequestDto.getSpecializationId())
-                .orElseThrow(() -> new IllegalArgumentException("Specialization not found"));
+        Long specializationId = trainerRequestDto.getSpecializationId();
+
+        TrainingType specialization = trainingTypeRepository.findById(specializationId)
+                .orElseThrow(() -> new SpecializationNotFoundException(specializationId));
 
         Trainer trainer = new Trainer();
         trainer.setFirstName(trainerRequestDto.getFirstName());
@@ -53,149 +60,160 @@ public class TrainerServiceImpl implements TrainerService {
         trainer.setSpecialization(specialization);
 
         trainerRepository.save(trainer);
-        log.info("Trainer created successfully: {}", trainer.getUsername());
+        log.info("[{}] Trainer created successfully: {}", transactionId, trainer.getUsername());
 
-        return mapToResponse(trainer);
+        return TrainerResponseDto.builder()
+                .username(username)
+                .password(password)
+                .build();
     }
 
     @Override
-    public boolean authenticateTrainer(String username, String password) {
-        log.info("Authenticating trainer: {}", username);
-        boolean isAuthenticated = authService.authenticateTrainer(username, password);
-        log.info("Authentication result for {}: {}", username, isAuthenticated);
-        return isAuthenticated;
+    public TrainerResponseDto getTrainerProfile() {
+        String transactionId = MDC.get("transactionId");
+        String username = getAuthenticatedUsername();
+        log.info("[{}] Fetching trainer profile: {}", transactionId, username);
+
+        Trainer trainer = findTrainerByUsername(username);
+
+        log.info("[{}] Trainer profile fetched successfully: {}", transactionId, username);
+        return mapToResponseWithTrainees(trainer);
     }
 
     @Override
-    public TrainerResponseDto getTrainerByUsername(String username, String password) {
-        log.info("Fetching trainer profile: {}", username);
-        authenticateOrThrow(username, password);
+    public TrainerResponseDto updateTrainerProfile(TrainerRequestDto request) {
+        String transactionId = MDC.get("transactionId");
+        String username = getAuthenticatedUsername();
+        log.info("[{}] Updating trainer profile: {}", transactionId, username);
 
-        return trainerRepository.findByUsername(username)
-                .map(this::mapToResponse)
-                .orElseThrow(() -> new IllegalArgumentException("Trainer not found: " + username));
-    }
-
-    @Override
-    public boolean changeTrainerPassword(String username, String oldPassword, String newPassword) {
-        log.info("Changing password for trainer: {}", username);
-        authenticateOrThrow(username, oldPassword);
-        validatePassword(newPassword);
-
-        Trainer trainer = getTrainerOrThrow(username);
-        trainer.setPassword(newPassword);
-        trainerRepository.save(trainer);
-
-        log.info("Password changed successfully for trainer: {}", username);
-        return true;
-    }
-
-    @Override
-    public boolean updateTrainer(String username, String password, TrainerRequestDto request, String newPassword) {
-        validateRequest(request);
-        log.info("Updating trainer profile: {}", username);
-        authenticateOrThrow(username, password);
-
-        Trainer trainer = getTrainerOrThrow(username);
-        TrainingType specialization = getSpecializationOrThrow(request.getSpecializationId());
-
-        updatePasswordIfProvided(trainer, newPassword);
-        updateUsernameIfChanged(trainer, request);
+        Trainer trainer = findTrainerByUsername(username);
 
         trainer.setFirstName(request.getFirstName());
         trainer.setLastName(request.getLastName());
-        trainer.setSpecialization(specialization);
+        trainer.setIsActive(request.getIsActive());
 
         trainerRepository.save(trainer);
-        log.info("Trainer profile updated: {}", username);
-        return true;
-    }
+        log.info("[{}] Trainer profile updated successfully: {}", transactionId, username);
 
-    private TrainingType getSpecializationOrThrow(Long specializationId) {
-        return trainingTypeRepository.findById(specializationId)
-                .orElseThrow(() -> new IllegalArgumentException("Specialization not found"));
-    }
-
-    private void updatePasswordIfProvided(Trainer trainer, String newPassword) {
-        Optional.ofNullable(newPassword)
-                .filter(pwd -> !pwd.isEmpty())
-                .ifPresent(pwd -> {
-                    validatePassword(pwd);
-                    trainer.setPassword(pwd);
-                });
-    }
-
-    private void updateUsernameIfChanged(Trainer trainer, TrainerRequestDto request) {
-        if (!trainer.getFirstName().equals(request.getFirstName())) {
-            trainer.setUsername(usernameUtil.generateUsername(request.getFirstName(), request.getLastName()));
-        }
+        return mapToResponseWithTraineesUsername(trainer);
     }
 
     @Override
-    public boolean changeTrainerStatus(String username, String password) {
-        log.info("Changing trainer status: {}", username);
-        authenticateOrThrow(username, password);
+    public boolean changeTrainerStatus() {
+        String transactionId = MDC.get("transactionId");
+        String username = getAuthenticatedUsername();
+        log.info("[{}] Toggling trainer status for {}", transactionId, username);
 
         Trainer trainer = getTrainerOrThrow(username);
-        trainer.setIsActive(!trainer.getIsActive());
+
+        boolean newStatus = !trainer.getIsActive();
+        trainer.setIsActive(newStatus);
         trainerRepository.save(trainer);
 
-        log.info("Trainer status updated for {}: {}", username, trainer.getIsActive());
-        return trainer.getIsActive();
-    }
-
-    @Override
-    public boolean deleteTrainer(String username, String password) {
-        log.info("Deleting trainer: {}", username);
-        authenticateOrThrow(username, password);
-
-        Trainer trainer = getTrainerOrThrow(username);
-        trainerRepository.delete(trainer);
-
-        log.info("Trainer deleted successfully: {}", username);
-        return true;
-    }
-
-    private void authenticateOrThrow(String username, String password) {
-        if (!authService.authenticateTrainer(username, password)) {
-            log.warn("Authentication failed for {}", username);
-            throw new SecurityException("Invalid username or password.");
-        }
+        log.info("[{}] Trainer status toggled for {}: new status = {}", transactionId, username, newStatus);
+        return newStatus;
     }
 
     private Trainer getTrainerOrThrow(String username) {
+        String transactionId = MDC.get("transactionId");
         return trainerRepository.findByUsername(username)
-                .orElseThrow(() -> new IllegalArgumentException("Trainer not found: " + username));
+                .orElseThrow(() -> {
+                    log.warn("Transaction [{}] - Trainer not found: {}", transactionId, username);
+                    return new TrainerNotFoundException("Trainer not found: " + username);
+                });
     }
 
     private void validateRequest(TrainerRequestDto request) {
-        Set<ConstraintViolation<TrainerRequestDto>> violations = validator.validate(request);
+        String transactionId = MDC.get("transactionId");
+        Set<jakarta.validation.ConstraintViolation<TrainerRequestDto>> violations = validator.validate(request);
         if (!violations.isEmpty()) {
             String errors = violations.stream()
-                    .map(ConstraintViolation::getMessage)
+                    .map(jakarta.validation.ConstraintViolation::getMessage)
                     .collect(Collectors.joining(", "));
-            log.warn("Validation failed: {}", errors);
-            throw new IllegalArgumentException("Validation failed: " + errors);
+
+            log.warn("[{}] Validation failed: {}", transactionId, errors);
+
+            Set<jakarta.validation.ConstraintViolation<?>> genericViolations = violations.stream()
+                    .map(v -> (jakarta.validation.ConstraintViolation<?>) v)
+                    .collect(Collectors.toSet());
+
+            throw new InvalidTrainerRequestException("Validation failed: " + errors, genericViolations);
         }
     }
 
-    private void validatePassword(String password) {
-        if (password == null || password.trim().isEmpty()) {
-            throw new IllegalArgumentException("New password cannot be empty.");
+    private String getAuthenticatedUsername() {
+        String transactionId = MDC.get("transactionId");
+        String authHeader = request.getHeader("Authorization");
+
+        if (authHeader != null && authHeader.startsWith("Basic ")) {
+            String base64Credentials = authHeader.substring("Basic ".length());
+            String credentials = new String(Base64.getDecoder().decode(base64Credentials), StandardCharsets.UTF_8);
+            String[] values = credentials.split(":", 2);
+
+            if (values.length != 2) {
+                throw new UnauthorizedException("Invalid authentication format");
+            }
+
+            String username = values[0];
+            String password = values[1];
+
+            log.info("[{}] Attempting authentication for username: {}", transactionId, username);
+
+            Optional<Trainer> trainerOptional = trainerRepository.findByUsername(username);
+            if (trainerOptional.isEmpty()) {
+                log.warn("[{}] Authentication failed: username {} not found", transactionId, username);
+                throw new UnauthorizedException("Invalid username or password");
+            }
+
+            Trainer trainer = trainerOptional.get();
+
+            if (trainer.getPassword() == null || !trainer.getPassword().equals(password)) {
+                log.warn("[{}] Authentication failed: incorrect or missing password for user {}", transactionId, username);
+                throw new UnauthorizedException("Invalid username or password");
+            }
+
+            log.info("[{}] Authentication successful for user: {}", transactionId, username);
+            return username;
         }
-        if (password.length() != 10) {
-            throw new IllegalArgumentException("Password must be exactly 10 characters long.");
-        }
+
+        throw new UnauthorizedException("Unauthorized request");
     }
 
-    private TrainerResponseDto mapToResponse(Trainer trainer) {
-        return new TrainerResponseDto(
-                trainer.getFirstName(),
-                trainer.getLastName(),
-                trainer.getUsername(),
-                trainer.getPassword(),
-                trainer.getIsActive(),
-                trainer.getSpecialization().getId()
-        );
+    private Trainer findTrainerByUsername(String username) {
+        return trainerRepository.findByUsername(username)
+                .orElseThrow(() -> new TrainerNotFoundException("Trainer not found: " + username));
+    }
+
+    private TrainerResponseDto mapToResponseWithTrainees(Trainer trainer) {
+        return TrainerResponseDto.builder()
+                .firstName(trainer.getFirstName())
+                .lastName(trainer.getLastName())
+                .specializationId(trainer.getSpecialization().getId())
+                .isActive(trainer.getIsActive())
+                .trainees(trainer.getTrainees() != null ? trainer.getTrainees().stream()
+                        .map(trainee -> TraineeResponseDto.builder()
+                                .username(trainee.getUsername())
+                                .firstName(trainee.getFirstName())
+                                .lastName(trainee.getLastName())
+                                .build())
+                        .collect(Collectors.toList()) : new ArrayList<>())
+                .build();
+    }
+
+    private TrainerResponseDto mapToResponseWithTraineesUsername(Trainer trainer) {
+        return TrainerResponseDto.builder()
+                .username(trainer.getUsername())
+                .firstName(trainer.getFirstName())
+                .lastName(trainer.getLastName())
+                .specializationId(trainer.getSpecialization().getId())
+                .isActive(trainer.getIsActive())
+                .trainees(trainer.getTrainees().stream()
+                        .map(trainee -> TraineeResponseDto.builder()
+                                .username(trainee.getUsername())
+                                .firstName(trainee.getFirstName())
+                                .lastName(trainee.getLastName())
+                                .build())
+                        .collect(Collectors.toList()))
+                .build();
     }
 }

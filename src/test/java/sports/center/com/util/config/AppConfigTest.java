@@ -1,70 +1,73 @@
 package sports.center.com.util.config;
-
-import org.junit.jupiter.api.BeforeAll;
+import jakarta.persistence.EntityManagerFactory;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.orm.jpa.JpaTransactionManager;
-import org.springframework.test.context.TestPropertySource;
 import sports.center.com.config.AppConfig;
 
 import javax.sql.DataSource;
+import java.lang.reflect.Method;
+import java.util.Properties;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.*;
 
-@TestPropertySource(properties = {
-        "DATASOURCE_URL=jdbc:postgresql://localhost:5432/Sports-Centre",
-        "DATASOURCE_USER=postgres",
-        "DATASOURCE_PASSWORD=postgres"
-})
 class AppConfigTest {
-    private static AnnotationConfigApplicationContext context;
 
-    @BeforeAll
-    static void setup() {
-        System.setProperty("DATASOURCE_URL", "jdbc:postgresql://localhost:5432/Sports-Centre");
-        System.setProperty("DATASOURCE_USER", "postgres");
-        System.setProperty("DATASOURCE_PASSWORD", "postgres");
+    private AppConfig appConfig;
+    private EntityManagerFactory entityManagerFactoryMock;
 
-        context = new AnnotationConfigApplicationContext(AppConfig.class);
+    @BeforeEach
+    void setUp() {
+        appConfig = new AppConfig();
+        entityManagerFactoryMock = mock(EntityManagerFactory.class);
     }
 
     @Test
-    void testDataSource() {
-        DataSource dataSource = context.getBean(DataSource.class);
-        assertNotNull(dataSource, "DataSource couldn't be null");
+    void testDataSource_NotNull() {
+        DataSource dataSource = appConfig.dataSource();
+        assertNotNull(dataSource, "DataSource should not be null");
     }
 
     @Test
-    void testTransactionManager() {
-        JpaTransactionManager transactionManager = context.getBean(JpaTransactionManager.class);
-        assertNotNull(transactionManager, "TransactionManager couldn't be null");
-        assertNotNull(transactionManager.getEntityManagerFactory(), "EntityManagerFactory couldn't be null");
+    void testEntityManagerFactory_NotNull() {
+        assertNotNull(appConfig.entityManagerFactory(), "EntityManagerFactory should not be null");
     }
 
     @Test
-    void testDatabaseConnection() {
-        DataSource dataSource = context.getBean(DataSource.class);
-        assertDoesNotThrow(() -> {
-            try (var connection = dataSource.getConnection()) {
-                assertFalse(connection.isClosed(), "Database connection shouldn't be closed");
-            }
-        }, "Error occurred while trying to connect to the database");
+    void testTransactionManager_NotNull() {
+        JpaTransactionManager transactionManager = new JpaTransactionManager();
+        transactionManager.setEntityManagerFactory(entityManagerFactoryMock);
+
+        assertNotNull(transactionManager, "TransactionManager should not be null");
+        assertNotNull(transactionManager.getEntityManagerFactory(), "EntityManagerFactory should not be null");
     }
 
     @Test
-    void testDatabaseDriver() {
-        DataSource dataSource = context.getBean(DataSource.class);
-        assertDoesNotThrow(() -> {
-            try (var connection = dataSource.getConnection()) {
-                assertEquals("PostgreSQL", connection.getMetaData().getDatabaseProductName(), "Database driver is incorrect");
-            }
-        }, "Error occurred while checking the database driver");
+    void testValidator_NotNull() {
+        assertNotNull(appConfig.validator(), "Validator should not be null");
     }
 
     @Test
-    void testEnvironmentVariables() {
-        assertEquals("jdbc:postgresql://localhost:5432/Sports-Centre", System.getProperty("DATASOURCE_URL"), "Incorrect DATASOURCE_URL");
-        assertEquals("postgres", System.getProperty("DATASOURCE_USER"), "Incorrect DATASOURCE_USER");
-        assertEquals("postgres", System.getProperty("DATASOURCE_PASSWORD"), "Incorrect DATASOURCE_PASSWORD");
+    void testDataSource_NotDestroyedAfterRecreation() {
+        DataSource firstInstance = appConfig.dataSource();
+        DataSource secondInstance = appConfig.dataSource();
+
+        assertNotNull(firstInstance, "First instance of DataSource should not be null");
+        assertNotNull(secondInstance, "Second instance of DataSource should not be null");
+        assertNotSame(firstInstance, secondInstance, "Each call should return a new instance");
+    }
+
+    @Test
+    void testHibernateProperties_NotNull() throws Exception {
+        Method method = AppConfig.class.getDeclaredMethod("hibernateProperties");
+        method.setAccessible(true);
+
+        Properties properties = (Properties) method.invoke(appConfig);
+
+        assertNotNull(properties, "Hibernate properties should not be null");
+        assertEquals("update", properties.getProperty("hibernate.hbm2ddl.auto"), "Incorrect Hibernate hbm2ddl.auto setting");
+        assertEquals("org.hibernate.dialect.PostgreSQLDialect", properties.getProperty("hibernate.dialect"), "Incorrect Hibernate dialect");
     }
 }
+

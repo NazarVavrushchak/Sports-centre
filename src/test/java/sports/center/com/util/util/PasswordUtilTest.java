@@ -36,4 +36,23 @@ public class PasswordUtilTest {
         }
         assertEquals(sampleSize, generatedPasswords.size(), "Generated passwords should be unique.");
     }
+
+    @Test
+    void generatePassword_WithCustomLength() {
+        int customLength = 20;
+        String password = PasswordUtil.generatePassword(customLength);
+        assertEquals(customLength, password.length(), "Generated password should match requested length.");
+    }
+
+    @Test
+    void generatePassword_WithZeroLength_ShouldReturnEmptyString() {
+        String password = PasswordUtil.generatePassword(0);
+        assertEquals("", password, "Generated password with zero length should be empty.");
+    }
+
+    @Test
+    void generatePassword_WithNegativeLength_ShouldReturnEmptyString() {
+        String password = PasswordUtil.generatePassword(-5);
+        assertEquals("", password, "Generated password with negative length should be empty.");
+    }
 }

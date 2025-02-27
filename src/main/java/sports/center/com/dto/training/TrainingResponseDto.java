@@ -1,5 +1,7 @@
 package sports.center.com.dto.training;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import lombok.*;
 
 import java.util.Date;
@@ -11,10 +13,13 @@ import java.util.Date;
 @NoArgsConstructor
 @Builder
 public class TrainingResponseDto {
-    private String traineeName;
-    private String trainerName;
-    private String trainingType;
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    private String traineeUsername;
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    private String trainerUsername;
     private String trainingName;
+    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd")
     private Date trainingDate;
     private int trainingDuration;
+    private String trainingTypeName;
 }

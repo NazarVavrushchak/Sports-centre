@@ -40,9 +40,9 @@ public class AppConfig {
         BasicDataSource dataSource = new BasicDataSource();
         dataSource.setDriverClassName("org.postgresql.Driver");
 
-        dataSource.setUrl(System.getenv("DATASOURCE_URL"));
-        dataSource.setUsername(System.getenv("DATASOURCE_USER"));
-        dataSource.setPassword(System.getenv("DATASOURCE_PASSWORD"));
+        dataSource.setUrl("jdbc:postgresql://localhost:5432/Sports-Centre");
+        dataSource.setUsername("postgres");
+        dataSource.setPassword("postgres");
 
         return dataSource;
     }
