@@ -26,5 +26,14 @@ public interface TrainerRepository extends JpaRepository<Trainer, Long> {
             """)
     List<Trainer> findUnassignedTrainers(@Param("traineeUsername") String traineeUsername);
 
+    @Query("""
+                SELECT t FROM Trainer t 
+                WHERE t.isActive = true 
+                AND t.id NOT IN (
+                    SELECT tr.trainer.id FROM Training tr WHERE tr.trainee.username = :traineeUsername
+                )
+            """)
+    List<Trainer> findNotAssignedActiveTrainers(@Param("traineeUsername") String traineeUsername);
+
     List<Trainer> findByUsernameIn(List<String> usernames);
 }

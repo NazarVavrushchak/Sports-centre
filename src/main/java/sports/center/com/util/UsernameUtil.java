@@ -31,7 +31,6 @@ public class UsernameUtil {
         int nextIndex = calculateNextIndex(usedIndexes);
         String finalUsername = formatFinalUsername(baseUsername, nextIndex);
 
-        logger.info("Generated username: {}", finalUsername);
         return finalUsername;
     }
 

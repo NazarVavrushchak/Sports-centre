@@ -6,15 +6,11 @@ import sports.center.com.dto.trainer.TrainerResponseDto;
 public interface TrainerService {
     TrainerResponseDto createTrainer(TrainerRequestDto trainerRequestDto);
 
-    boolean authenticateTrainer(String username, String password);
+    TrainerResponseDto getTrainerProfile();
 
-    TrainerResponseDto getTrainerByUsername(String username, String password);
+    boolean changeTrainerPassword(String newPassword);
 
-    boolean changeTrainerPassword(String username, String oldPassword, String newPassword);
+    TrainerResponseDto updateTrainerProfile(TrainerRequestDto request);
 
-    boolean updateTrainer(String username, String password, TrainerRequestDto request, String newPassword);
-
-    boolean changeTrainerStatus(String username, String password);
-
-    boolean deleteTrainer(String username, String password);
+    boolean changeTrainerStatus();
 }

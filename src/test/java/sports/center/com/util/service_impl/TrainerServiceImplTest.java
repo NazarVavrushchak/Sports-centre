@@ -1,5 +1,6 @@
 package sports.center.com.util.service_impl;
 
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Validator;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -9,25 +10,27 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import sports.center.com.dto.trainer.TrainerRequestDto;
 import sports.center.com.dto.trainer.TrainerResponseDto;
+import sports.center.com.exception.exceptions.InvalidTrainerRequestException;
+import sports.center.com.exception.exceptions.SpecializationNotFoundException;
+import sports.center.com.exception.exceptions.UnauthorizedException;
 import sports.center.com.model.Trainer;
 import sports.center.com.model.TrainingType;
 import sports.center.com.repository.TrainerRepository;
 import sports.center.com.repository.TrainingTypeRepository;
-import sports.center.com.service.AuthService;
 import sports.center.com.service.impl.TrainerServiceImpl;
 import sports.center.com.util.UsernameUtil;
 
+import java.lang.reflect.Method;
+import java.util.ArrayList;
 import java.util.Optional;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class TrainerServiceImplTest {
-
-    @InjectMocks
-    private TrainerServiceImpl trainerService;
 
     @Mock
     private TrainerRepository trainerRepository;
@@ -36,159 +39,256 @@ class TrainerServiceImplTest {
     private TrainingTypeRepository trainingTypeRepository;
 
     @Mock
-    private AuthService authService;
-
-    @Mock
     private UsernameUtil usernameUtil;
 
     @Mock
     private Validator validator;
 
+    @Mock
+    private HttpServletRequest request;
+
+    @InjectMocks
+    private TrainerServiceImpl trainerService;
+
     private Trainer trainer;
-    private TrainingType trainingType;
-    private TrainerRequestDto trainerRequest;
+    private TrainerRequestDto trainerRequestDto;
 
     @BeforeEach
     void setUp() {
-        trainingType = new TrainingType(1L, "Fitness", null, null);
-        trainer = new Trainer("John", "Doe", "john.doe", "password12", true, trainingType);
-        trainerRequest = new TrainerRequestDto("John", "Doe", 1L);
+        trainer = new Trainer();
+        trainer.setFirstName("John");
+        trainer.setLastName("Doe");
+        trainer.setUsername("johndoe");
+        trainer.setPassword("password123");
+        trainer.setIsActive(true);
+        trainer.setSpecialization(new TrainingType());
+        trainer.setTrainees(new ArrayList<>());
+
+        trainerRequestDto = new TrainerRequestDto("John", "Doe", 1L, true);
     }
 
     @Test
-    void createTrainer() {
-        when(validator.validate(any())).thenReturn(Set.of());
-        when(usernameUtil.generateUsername("John", "Doe")).thenReturn("john.doe");
+    void createTrainer_InvalidRequest_ShouldThrowInvalidTrainerRequestException() {
+        TrainerRequestDto invalidRequest = new TrainerRequestDto("", "", null, null);
+
+        doThrow(new InvalidTrainerRequestException("Validation failed", Set.of()))
+                .when(validator).validate(any(TrainerRequestDto.class));
+
+        assertThrows(InvalidTrainerRequestException.class, () -> trainerService.createTrainer(invalidRequest));
+    }
+
+    @Test
+    void createTrainer_Success() {
+        TrainingType trainingType = new TrainingType();
+        trainingType.setId(1L);
+
+        when(usernameUtil.generateUsername(any(), any())).thenReturn("johndoe");
         when(trainingTypeRepository.findById(1L)).thenReturn(Optional.of(trainingType));
         when(trainerRepository.save(any(Trainer.class))).thenReturn(trainer);
 
-        TrainerResponseDto response = trainerService.createTrainer(trainerRequest);
+        TrainerResponseDto response = trainerService.createTrainer(trainerRequestDto);
+
+        assertNotNull(response);
+        assertEquals("johndoe", response.getUsername());
+    }
+
+    @Test
+    void createTrainer_SpecializationNotFound_ShouldThrowException() {
+        when(trainingTypeRepository.findById(anyLong())).thenReturn(Optional.empty());
+
+        assertThrows(SpecializationNotFoundException.class, () -> trainerService.createTrainer(trainerRequestDto));
+    }
+
+    @Test
+    void createTrainer_NullSpecialization_ShouldThrowSpecializationNotFoundException() {
+        TrainerRequestDto requestDto = new TrainerRequestDto("John", "Doe", null, true);
+
+        assertThrows(SpecializationNotFoundException.class, () -> trainerService.createTrainer(requestDto));
+    }
+
+    @Test
+    void getTrainerProfile_TrainerExists() {
+        when(request.getHeader("Authorization")).thenReturn("Basic am9obmRvZTpwYXNzd29yZDEyMw==");
+        when(trainerRepository.findByUsername("johndoe")).thenReturn(Optional.of(trainer));
+
+        TrainerResponseDto response = trainerService.getTrainerProfile();
 
         assertNotNull(response);
         assertEquals("John", response.getFirstName());
-        assertEquals("Doe", response.getLastName());
-        assertEquals("john.doe", response.getUsername());
-        verify(trainerRepository, times(1)).save(any(Trainer.class));
     }
 
     @Test
-    void createTrainer_ThrowsException_WhenSpecializationNotFound() {
-        when(trainingTypeRepository.findById(1L)).thenReturn(Optional.empty());
+    void getTrainerProfile_TrainerHasNoSpecialization_ShouldThrowException() {
+        trainer.setSpecialization(null);
 
-        Exception exception = assertThrows(IllegalArgumentException.class, () -> {
-            trainerService.createTrainer(trainerRequest);
-        });
+        when(request.getHeader("Authorization")).thenReturn("Basic am9obmRvZTpwYXNzd29yZDEyMw==");
+        when(trainerRepository.findByUsername("johndoe")).thenReturn(Optional.of(trainer));
 
-        assertEquals("Specialization not found", exception.getMessage());
+        assertThrows(NullPointerException.class, () -> trainerService.getTrainerProfile());
     }
 
     @Test
-    void authenticateTrainer() {
-        when(authService.authenticateTrainer("john.doe", "password123")).thenReturn(true);
+    void getTrainerProfile_TrainerNotFound_ShouldThrowUnauthorizedException() {
+        when(request.getHeader("Authorization")).thenReturn("Basic am9obmRvZTpwYXNzd29yZDEyMw==");
+        when(trainerRepository.findByUsername("johndoe")).thenReturn(Optional.empty());
 
-        boolean result = trainerService.authenticateTrainer("john.doe", "password123");
-
-        assertTrue(result);
-        verify(authService, times(1)).authenticateTrainer("john.doe", "password123");
+        assertThrows(UnauthorizedException.class, () -> trainerService.getTrainerProfile());
     }
 
     @Test
-    void getTrainerByUsername() {
-        when(authService.authenticateTrainer("john.doe", "password123")).thenReturn(true);
-        when(trainerRepository.findByUsername("john.doe")).thenReturn(Optional.of(trainer));
+    void updateTrainerProfile_NoChanges_ShouldReturnSameTrainer() {
+        when(request.getHeader("Authorization")).thenReturn("Basic am9obmRvZTpwYXNzd29yZDEyMw==");
+        when(trainerRepository.findByUsername("johndoe")).thenReturn(Optional.of(trainer));
+        when(trainerRepository.save(any(Trainer.class))).thenReturn(trainer);
 
-        TrainerResponseDto response = trainerService.getTrainerByUsername("john.doe", "password123");
+        TrainerResponseDto response = trainerService.updateTrainerProfile(trainerRequestDto);
 
-        assertNotNull(response);
         assertEquals("John", response.getFirstName());
         assertEquals("Doe", response.getLastName());
     }
 
     @Test
-    void getTrainerByUsername_ThrowsException_WhenTrainerNotFound() {
-        when(authService.authenticateTrainer("john.doe", "password123")).thenReturn(true);
-        when(trainerRepository.findByUsername("john.doe")).thenReturn(Optional.empty());
+    void getAuthenticatedUsername_TrainerHasNoPassword_ShouldThrowUnauthorizedException() {
+        trainer.setPassword(null);
 
-        Exception exception = assertThrows(IllegalArgumentException.class, () -> {
-            trainerService.getTrainerByUsername("john.doe", "password123");
-        });
+        when(request.getHeader("Authorization")).thenReturn("Basic am9obmRvZTpwYXNzd29yZDEyMw==");
+        when(trainerRepository.findByUsername("johndoe")).thenReturn(Optional.of(trainer));
 
-        assertEquals("Trainer not found: john.doe", exception.getMessage());
+        assertThrows(UnauthorizedException.class, () -> trainerService.getTrainerProfile());
     }
 
     @Test
-    void changeTrainerPassword() {
-        when(authService.authenticateTrainer("john.doe", "oldPass")).thenReturn(true);
-        when(trainerRepository.findByUsername("john.doe")).thenReturn(Optional.of(trainer));
+    void getTrainerProfile_TrainerHasNoTrainees_ShouldNotThrowException() {
+        trainer.setTrainees(null);
 
-        boolean result = trainerService.changeTrainerPassword("john.doe", "oldPass", "newPasswor");
+        when(request.getHeader("Authorization")).thenReturn("Basic am9obmRvZTpwYXNzd29yZDEyMw==");
+        when(trainerRepository.findByUsername("johndoe")).thenReturn(Optional.of(trainer));
 
-        assertTrue(result);
-        assertEquals("newPasswor", trainer.getPassword());
-        verify(trainerRepository, times(1)).save(trainer);
+        assertDoesNotThrow(() -> trainerService.getTrainerProfile());
     }
 
     @Test
-    void updateTrainer() {
-        when(validator.validate(any())).thenReturn(Set.of());
-        when(authService.authenticateTrainer("john.doe", "password12")).thenReturn(true);
-        when(trainerRepository.findByUsername("john.doe")).thenReturn(Optional.of(trainer));
-        when(trainingTypeRepository.findById(1L)).thenReturn(Optional.of(trainingType));
+    void changeTrainerStatus_Success() {
+        when(request.getHeader("Authorization")).thenReturn("Basic am9obmRvZTpwYXNzd29yZDEyMw==");
+        when(trainerRepository.findByUsername("johndoe")).thenReturn(Optional.of(trainer));
+        when(trainerRepository.save(any(Trainer.class))).thenAnswer(i -> i.getArgument(0));
 
-        boolean result = trainerService.updateTrainer("john.doe", "password12", trainerRequest, "newPasswor");
+        boolean previousStatus = trainer.getIsActive();
+        boolean result = trainerService.changeTrainerStatus();
 
-        assertTrue(result);
-        assertEquals("newPasswor", trainer.getPassword());
-        assertEquals("John", trainer.getFirstName());
-        assertEquals("Doe", trainer.getLastName());
-        verify(trainerRepository, times(1)).save(trainer);
-    }
-
-
-    @Test
-    void updateTrainer_ThrowsException_WhenTrainerNotFound() {
-        when(authService.authenticateTrainer("john.doe", "password123")).thenReturn(true);
-        when(trainerRepository.findByUsername("john.doe")).thenReturn(Optional.empty());
-
-        Exception exception = assertThrows(IllegalArgumentException.class, () -> {
-            trainerService.updateTrainer("john.doe", "password123", trainerRequest, "newPass");
-        });
-
-        assertEquals("Trainer not found: john.doe", exception.getMessage());
+        assertNotEquals(previousStatus, result);
+        assertEquals(!previousStatus, trainer.getIsActive());
+        verify(trainerRepository).save(trainer);
     }
 
     @Test
-    void changeTrainerStatus() {
-        when(authService.authenticateTrainer("john.doe", "password123")).thenReturn(true);
-        when(trainerRepository.findByUsername("john.doe")).thenReturn(Optional.of(trainer));
+    void changeTrainerStatus_Unauthorized_ShouldThrowException() {
+        when(request.getHeader("Authorization")).thenReturn(null);
 
-        boolean result = trainerService.changeTrainerStatus("john.doe", "password123");
-
-        assertFalse(trainer.getIsActive());
-        assertFalse(result);
-        verify(trainerRepository, times(1)).save(trainer);
+        assertThrows(UnauthorizedException.class, () -> trainerService.changeTrainerStatus());
     }
 
     @Test
-    void deleteTrainer() {
-        when(authService.authenticateTrainer("john.doe", "password123")).thenReturn(true);
-        when(trainerRepository.findByUsername("john.doe")).thenReturn(Optional.of(trainer));
+    void changeTrainerStatus_ToggleTwice_ShouldRestoreOriginalState() {
+        when(request.getHeader("Authorization")).thenReturn("Basic am9obmRvZTpwYXNzd29yZDEyMw==");
+        when(trainerRepository.findByUsername("johndoe")).thenReturn(Optional.of(trainer));
+        when(trainerRepository.save(any(Trainer.class))).thenAnswer(i -> i.getArgument(0));
 
-        boolean result = trainerService.deleteTrainer("john.doe", "password123");
+        boolean initialStatus = trainer.getIsActive();
 
-        assertTrue(result);
-        verify(trainerRepository, times(1)).delete(trainer);
+        boolean firstToggle = trainerService.changeTrainerStatus();
+        assertNotEquals(initialStatus, firstToggle);
+        assertEquals(!initialStatus, trainer.getIsActive());
+
+        boolean secondToggle = trainerService.changeTrainerStatus();
+        assertEquals(initialStatus, secondToggle);
+        assertEquals(initialStatus, trainer.getIsActive());
+
+        verify(trainerRepository, times(2)).save(trainer);
     }
 
     @Test
-    void deleteTrainer_ThrowsException_WhenTrainerNotFound() {
-        when(authService.authenticateTrainer("john.doe", "password123")).thenReturn(true);
-        when(trainerRepository.findByUsername("john.doe")).thenReturn(Optional.empty());
+    void updateTrainerProfile_Success() {
+        when(request.getHeader("Authorization")).thenReturn("Basic am9obmRvZTpwYXNzd29yZDEyMw==");
+        when(trainerRepository.findByUsername("johndoe")).thenReturn(Optional.of(trainer));
+        when(trainerRepository.save(any(Trainer.class))).thenReturn(trainer);
 
-        Exception exception = assertThrows(IllegalArgumentException.class, () -> {
-            trainerService.deleteTrainer("john.doe", "password123");
-        });
+        TrainerResponseDto response = trainerService.updateTrainerProfile(trainerRequestDto);
 
-        assertEquals("Trainer not found: john.doe", exception.getMessage());
+        assertNotNull(response);
+        assertEquals("John", response.getFirstName());
+    }
+
+    @Test
+    void validateTrainerRequest_InvalidRequest_ShouldThrowException() {
+        TrainerRequestDto invalidRequest = new TrainerRequestDto("", "", null, null);
+        when(validator.validate(invalidRequest)).thenThrow(InvalidTrainerRequestException.class);
+
+        assertThrows(InvalidTrainerRequestException.class, () -> trainerService.createTrainer(invalidRequest));
+    }
+
+    @Test
+    void getTrainerProfile_InvalidAuthHeader_ShouldThrowUnauthorizedException() {
+        when(request.getHeader("Authorization")).thenReturn("Bearer sometoken");
+
+        assertThrows(UnauthorizedException.class, () -> trainerService.getTrainerProfile());
+    }
+
+    @Test
+    void getTrainerProfile_NoAuthHeader_ShouldThrowUnauthorizedException() {
+        when(request.getHeader("Authorization")).thenReturn(null);
+
+        assertThrows(UnauthorizedException.class, () -> trainerService.getTrainerProfile());
+    }
+
+    @Test
+    void changeTrainerStatus_ShouldToggleStatus() {
+        when(request.getHeader("Authorization")).thenReturn("Basic am9obmRvZTpwYXNzd29yZDEyMw==");
+        when(trainerRepository.findByUsername("johndoe")).thenReturn(Optional.of(trainer));
+        when(trainerRepository.save(any(Trainer.class))).thenAnswer(i -> i.getArgument(0));
+
+        boolean initialStatus = trainer.getIsActive();
+        boolean newStatus = trainerService.changeTrainerStatus();
+
+        assertNotEquals(initialStatus, newStatus);
+        assertEquals(!initialStatus, trainer.getIsActive());
+    }
+
+    @Test
+    void mapToResponseWithTraineesUsername_ShouldMapCorrectly() throws Exception {
+        Method method = TrainerServiceImpl.class.getDeclaredMethod("mapToResponseWithTraineesUsername", Trainer.class);
+        method.setAccessible(true);
+
+        TrainerResponseDto response = (TrainerResponseDto) method.invoke(trainerService, trainer);
+        assertNotNull(response);
+        assertEquals(trainer.getUsername(), response.getUsername());
+    }
+
+    @Test
+    void getTrainerProfile_Unauthorized_ShouldThrowException() {
+        when(request.getHeader("Authorization")).thenReturn(null);
+        assertThrows(UnauthorizedException.class, () -> trainerService.getTrainerProfile());
+    }
+
+    @Test
+    void getAuthenticatedUsername_InvalidFormat_ShouldThrowException() {
+        when(request.getHeader("Authorization")).thenReturn("InvalidFormatToken");
+        assertThrows(UnauthorizedException.class, () -> trainerService.getTrainerProfile());
+    }
+
+    @Test
+    void validateRequest_WithInvalidRequest_ShouldThrowException() {
+        TrainerRequestDto invalidRequest = new TrainerRequestDto("", "", null, null);
+        doThrow(new InvalidTrainerRequestException("Validation failed", Set.of()))
+                .when(validator).validate(any(TrainerRequestDto.class));
+        assertThrows(InvalidTrainerRequestException.class, () -> trainerService.createTrainer(invalidRequest));
+    }
+
+    @Test
+    void getAuthenticatedUsername_WrongPassword_ShouldThrowException() {
+        trainer.setPassword("correctPassword");
+        when(request.getHeader("Authorization")).thenReturn("Basic am9obmRvZTp3cm9uZ3Bhc3N3b3Jk");
+        when(trainerRepository.findByUsername("johndoe")).thenReturn(Optional.of(trainer));
+        assertThrows(UnauthorizedException.class, () -> trainerService.getTrainerProfile());
     }
 }
