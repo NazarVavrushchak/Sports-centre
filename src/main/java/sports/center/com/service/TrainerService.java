@@ -8,6 +8,8 @@ public interface TrainerService {
 
     TrainerResponseDto getTrainerProfile();
 
+    boolean changeTrainerPassword(String newPassword);
+
     TrainerResponseDto updateTrainerProfile(TrainerRequestDto request);
 
     boolean changeTrainerStatus();

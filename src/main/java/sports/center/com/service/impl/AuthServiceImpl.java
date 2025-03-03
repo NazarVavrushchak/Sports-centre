@@ -74,4 +74,5 @@ public class AuthServiceImpl implements AuthService {
 
         return authenticateTrainee(username, password) || authenticateTrainer(username, password);
     }
+
 }

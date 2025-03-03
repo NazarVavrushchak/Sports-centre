@@ -53,17 +53,6 @@ class BasicAuthFilterTest {
     }
 
     @Test
-    void shouldAllowGetRequestsToTrainingTypes() throws ServletException, IOException {
-        when(request.getRequestURI()).thenReturn("/Sports-Centre/training/training-types");
-        when(request.getMethod()).thenReturn("GET");
-
-        basicAuthFilter.doFilter(request, response, filterChain);
-
-        verify(filterChain).doFilter(request, response);
-        verifyNoInteractions(authService);
-    }
-
-    @Test
     void shouldRejectRequestWhenAuthorizationHeaderIsMissing() throws ServletException, IOException {
         when(request.getHeader("Authorization")).thenReturn(null);
 

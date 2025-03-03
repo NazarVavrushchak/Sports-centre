@@ -115,7 +115,7 @@ class TrainerControllerTest {
 
         when(trainerService.getTrainerProfile()).thenReturn(responseDto);
 
-        mockMvc.perform(get("/trainer/profile"))
+        mockMvc.perform(get("/trainer/username"))
                 .andExpect(status().isOk());
     }
 
@@ -136,7 +136,7 @@ class TrainerControllerTest {
 
         String requestBody = "{\"firstName\":\"Updated\",\"lastName\":\"Trainer\",\"specializationId\":2,\"isActive\":true}";
 
-        mockMvc.perform(put("/trainer/profile")
+        mockMvc.perform(put("/trainer/username")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(requestBody))
                 .andExpect(status().isOk());

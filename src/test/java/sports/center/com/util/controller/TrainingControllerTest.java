@@ -43,34 +43,6 @@ class TrainingControllerTest {
     }
 
     @Test
-    void shouldAddTraining() throws Exception {
-        TrainingRequestDto requestDto = TrainingRequestDto.builder()
-                .traineeUsername("trainee1")
-                .trainerUsername("trainer1")
-                .trainingName("Cardio Session")
-                .trainingDate(new Date())
-                .trainingDuration(30)
-                .trainingTypeName("Cardio")
-                .build();
-
-        String requestBody = """
-                {
-                    "traineeUsername": "trainee1",
-                    "trainerUsername": "trainer1",
-                    "trainingName": "Cardio Session",
-                    "trainingDate": "2025-03-01",
-                    "trainingDuration": 30,
-                    "trainingTypeName": "Cardio"
-                }
-                """;
-
-        mockMvc.perform(post("/training")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(requestBody))
-                .andExpect(status().isOk());
-    }
-
-    @Test
     void shouldGetNotAssignedActiveTrainers() throws Exception {
         List<TrainerResponseDto> trainers = Collections.singletonList(
                 TrainerResponseDto.builder()

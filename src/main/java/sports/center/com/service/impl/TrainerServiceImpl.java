@@ -81,6 +81,24 @@ public class TrainerServiceImpl implements TrainerService {
     }
 
     @Override
+    public boolean changeTrainerPassword(String newPassword) {
+        String transactionId = MDC.get("transactionId");
+        String username = getAuthenticatedUsername();
+        log.info("Transaction [{}] - Changing password for trainer: {}", transactionId, username);
+
+        validatePassword(newPassword);
+
+        Trainer trainer = getTrainerOrThrow(username);
+        trainer.setPassword(newPassword);
+
+        trainerRepository.save(trainer);
+
+        log.info("[{}] Trainer password changed successfully: {}", transactionId, username);
+
+        return true;
+    }
+
+    @Override
     public TrainerResponseDto updateTrainerProfile(TrainerRequestDto request) {
         String transactionId = MDC.get("transactionId");
         String username = getAuthenticatedUsername();
@@ -177,6 +195,18 @@ public class TrainerServiceImpl implements TrainerService {
         }
 
         throw new UnauthorizedException("Unauthorized request");
+    }
+
+    private void validatePassword(String password) {
+        String transactionId = MDC.get("transactionId");
+        if (password == null || password.trim().isEmpty()) {
+            log.warn("Transaction [{}] - Password validation failed: empty password", transactionId);
+            throw new InvalidPasswordException("New password cannot be empty.");
+        }
+        if (password.length() != 10) {
+            log.warn("Transaction [{}] - Password validation failed: incorrect length", transactionId);
+            throw new InvalidPasswordException("Password must be exactly 10 characters long.");
+        }
     }
 
     private Trainer findTrainerByUsername(String username) {

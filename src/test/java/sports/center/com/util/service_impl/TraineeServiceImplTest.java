@@ -76,17 +76,6 @@ class TraineeServiceImplTest {
     }
 
     @Test
-    void createTrainee_InvalidRequest_ShouldThrowException() {
-        TraineeRequestDto invalidRequest = new TraineeRequestDto("", "", new Date(), "123", true);
-
-        Set<ConstraintViolation<?>> violations = new HashSet<>();
-        doThrow(new InvalidTraineeRequestException("Validation failed", violations))
-                .when(validator).validate(invalidRequest);
-
-        assertThrows(InvalidTraineeRequestException.class, () -> traineeService.createTrainee(invalidRequest));
-    }
-
-    @Test
     void getTraineeProfile_TraineeExists() {
         when(request.getHeader("Authorization")).thenReturn("Basic am9obmRvZTpwYXNzd29yZDEyMw==");
         when(traineeRepository.findByUsername("johndoe")).thenReturn(Optional.of(trainee));

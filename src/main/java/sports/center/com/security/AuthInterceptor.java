@@ -16,7 +16,7 @@ public class AuthInterceptor implements HandlerInterceptor {
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) throws Exception {
         String requestURI = request.getRequestURI();
 
-        if ((requestURI.equals("/Sports-Centre/trainee") || requestURI.equals("/Sports-Centre/trainer"))
+        if ((requestURI.equals("/trainee") || requestURI.equals("/trainer"))
                 && request.getMethod().equalsIgnoreCase("POST")) {
             return true;
         }

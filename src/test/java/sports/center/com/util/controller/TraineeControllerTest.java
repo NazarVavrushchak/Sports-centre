@@ -98,7 +98,7 @@ class TraineeControllerTest {
     void shouldChangeLogin() throws Exception {
         when(traineeService.changeTraineePassword(any())).thenReturn(true);
 
-        mockMvc.perform(put("/trainee/change-login?newPassword=newpass"))
+        mockMvc.perform(put("/trainee/login?newPassword=newpass"))
                 .andExpect(status().isOk());
     }
 
@@ -116,7 +116,7 @@ class TraineeControllerTest {
 
         when(traineeService.getTraineeProfile()).thenReturn(responseDto);
 
-        mockMvc.perform(get("/trainee/profile"))
+        mockMvc.perform(get("/trainee/username"))
                 .andExpect(status().isOk());
     }
 
@@ -140,7 +140,7 @@ class TraineeControllerTest {
                 validDateOfBirth
         );
 
-        mockMvc.perform(put("/trainee/profile")
+        mockMvc.perform(put("/trainee/username")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(requestBody))
                 .andExpect(status().isOk());

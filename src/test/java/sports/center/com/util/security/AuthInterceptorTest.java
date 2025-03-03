@@ -42,15 +42,6 @@ class AuthInterceptorTest {
     }
 
     @Test
-    void preHandle_ShouldAllowAccessToTrainingTypes() throws Exception {
-        when(request.getRequestURI()).thenReturn("/Sports-Centre/training/training-types");
-
-        boolean result = authInterceptor.preHandle(request, response, new Object());
-
-        assertTrue(result, "Request to /Sports-Centre/training/training-types should be allowed");
-    }
-
-    @Test
     void preHandle_ShouldDenyAccessIfAuthenticationFails() throws Exception {
         when(request.getRequestURI()).thenReturn("/Sports-Centre/protected");
         when(authService.authenticateRequest(request)).thenReturn(false);

@@ -4,7 +4,6 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -37,35 +36,6 @@ public class TraineeController {
     @PostMapping
     public ResponseEntity<TraineeResponseDto> registerTrainee(@Valid @RequestBody TraineeRequestDto request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(traineeService.createTrainee(request));
-    }
-
-    @Operation(summary = "Login trainee")
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = HttpStatuses.OK),
-            @ApiResponse(responseCode = "401", description = HttpStatuses.UNAUTHORIZED),
-            @ApiResponse(responseCode = "500", description = HttpStatuses.INTERNAL_SERVER_ERROR)
-    })
-    @GetMapping("/login")
-    public ResponseEntity<String> login(HttpServletRequest request) {
-        if (!authService.authenticateRequest(request)) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(HttpStatuses.UNAUTHORIZED);
-        }
-        return ResponseEntity.ok(HttpStatuses.OK);
-    }
-
-    @Operation(summary = "Change login")
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = HttpStatuses.OK),
-            @ApiResponse(responseCode = "400", description = HttpStatuses.BAD_REQUEST),
-            @ApiResponse(responseCode = "401", description = HttpStatuses.UNAUTHORIZED),
-            @ApiResponse(responseCode = "500", description = HttpStatuses.INTERNAL_SERVER_ERROR)
-    })
-    @PutMapping("/login")
-    public ResponseEntity<String> changeLogin(@RequestParam("newPassword") String newPassword) {
-        boolean isUpdated = traineeService.changeTraineePassword(newPassword);
-        return isUpdated
-                ? ResponseEntity.ok(HttpStatuses.OK)
-                : ResponseEntity.status(HttpStatus.BAD_REQUEST).body(HttpStatuses.BAD_REQUEST);
     }
 
     @Operation(summary = "Get trainee profile by username")
