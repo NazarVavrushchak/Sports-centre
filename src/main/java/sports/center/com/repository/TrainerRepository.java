@@ -36,4 +36,6 @@ public interface TrainerRepository extends JpaRepository<Trainer, Long> {
     List<Trainer> findNotAssignedActiveTrainers(@Param("traineeUsername") String traineeUsername);
 
     List<Trainer> findByUsernameIn(List<String> usernames);
+
+    long countByIsActiveTrue();
 }

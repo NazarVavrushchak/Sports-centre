@@ -11,7 +11,6 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import sports.center.com.controller.TrainingController;
 import sports.center.com.dto.trainer.TrainerResponseDto;
-import sports.center.com.dto.training.TrainingRequestDto;
 import sports.center.com.dto.training.TrainingResponseDto;
 import sports.center.com.dto.training.TrainingTypeResponseDto;
 import sports.center.com.service.TrainingService;
@@ -23,8 +22,9 @@ import java.util.List;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.when;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @ExtendWith(MockitoExtension.class)
 class TrainingControllerTest {
@@ -133,5 +133,4 @@ class TrainingControllerTest {
         mockMvc.perform(get("/training/training-types"))
                 .andExpect(status().isOk());
     }
-
 }

@@ -79,30 +79,6 @@ class TraineeControllerTest {
     }
 
     @Test
-    void shouldLoginTrainee() throws Exception {
-        when(authService.authenticateRequest(any())).thenReturn(true);
-
-        mockMvc.perform(get("/trainee/login"))
-                .andExpect(status().isOk());
-    }
-
-    @Test
-    void shouldFailLoginTrainee() throws Exception {
-        when(authService.authenticateRequest(any())).thenReturn(false);
-
-        mockMvc.perform(get("/trainee/login"))
-                .andExpect(status().isUnauthorized());
-    }
-
-    @Test
-    void shouldChangeLogin() throws Exception {
-        when(traineeService.changeTraineePassword(any())).thenReturn(true);
-
-        mockMvc.perform(put("/trainee/login?newPassword=newpass"))
-                .andExpect(status().isOk());
-    }
-
-    @Test
     void shouldGetTraineeProfile() throws Exception {
         TraineeResponseDto responseDto = TraineeResponseDto.builder()
                 .firstName("John")

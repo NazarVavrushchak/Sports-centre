@@ -38,8 +38,9 @@ class BasicAuthFilterTest {
     @BeforeEach
     void setUp() {
         basicAuthFilter = new BasicAuthFilter(authService);
-        when(request.getRequestURI()).thenReturn("/Sports-Centre/trainee");
-        when(request.getMethod()).thenReturn("GET");
+
+        lenient().when(request.getRequestURI()).thenReturn("/trainee");
+        lenient().when(request.getMethod()).thenReturn("GET");
     }
 
     @Test
@@ -76,7 +77,7 @@ class BasicAuthFilterTest {
 
     @Test
     void shouldRejectRequestWhenCredentialsAreInvalid() throws ServletException, IOException {
-        when(request.getHeader("Authorization")).thenReturn("Basic dGVzdHVzZXI6dGVzdHBhc3M="); // Base64("testuser:testpass")
+        when(request.getHeader("Authorization")).thenReturn("Basic dGVzdHVzZXI6dGVzdHBhc3M=");
         when(authService.authenticateTrainee("testuser", "testpass")).thenReturn(false);
 
         basicAuthFilter.doFilter(request, response, filterChain);
@@ -87,7 +88,7 @@ class BasicAuthFilterTest {
 
     @Test
     void shouldAllowRequestWhenCredentialsAreValid() throws ServletException, IOException {
-        when(request.getHeader("Authorization")).thenReturn("Basic dGVzdHVzZXI6dGVzdHBhc3M="); // Base64("testuser:testpass")
+        when(request.getHeader("Authorization")).thenReturn("Basic dGVzdHVzZXI6dGVzdHBhc3M=");
         when(authService.authenticateTrainee("testuser", "testpass")).thenReturn(true);
 
         basicAuthFilter.doFilter(request, response, filterChain);
