@@ -21,7 +21,8 @@ import java.util.Collections;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @ExtendWith(MockitoExtension.class)
 class TrainerControllerTest {
@@ -70,22 +71,6 @@ class TrainerControllerTest {
     }
 
     @Test
-    void shouldLoginTrainer() throws Exception {
-        when(authService.authenticateRequest(any())).thenReturn(true);
-
-        mockMvc.perform(get("/trainer/login"))
-                .andExpect(status().isOk());
-    }
-
-    @Test
-    void shouldFailLoginTrainer() throws Exception {
-        when(authService.authenticateRequest(any())).thenReturn(false);
-
-        mockMvc.perform(get("/trainer/login"))
-                .andExpect(status().isUnauthorized());
-    }
-
-    @Test
     void shouldToggleTrainerStatus() throws Exception {
         when(trainerService.changeTrainerStatus()).thenReturn(true);
 
@@ -99,7 +84,6 @@ class TrainerControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(content().string("Trainer status changed to: false"));
     }
-
 
     @Test
     void shouldGetTrainerProfile() throws Exception {

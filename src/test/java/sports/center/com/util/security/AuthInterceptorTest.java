@@ -33,17 +33,17 @@ class AuthInterceptorTest {
 
     @Test
     void preHandle_ShouldAllowPostRequestsToCertainEndpoints() throws Exception {
-        when(request.getRequestURI()).thenReturn("/Sports-Centre/trainee");
+        when(request.getRequestURI()).thenReturn("/trainee");
         when(request.getMethod()).thenReturn("POST");
 
         boolean result = authInterceptor.preHandle(request, response, new Object());
 
-        assertTrue(result, "POST request to /Sports-Centre/trainee should be allowed");
+        assertTrue(result, "POST request to /trainee should be allowed");
     }
 
     @Test
     void preHandle_ShouldDenyAccessIfAuthenticationFails() throws Exception {
-        when(request.getRequestURI()).thenReturn("/Sports-Centre/protected");
+        when(request.getRequestURI()).thenReturn("/protected");
         when(authService.authenticateRequest(request)).thenReturn(false);
 
         boolean result = authInterceptor.preHandle(request, response, new Object());
@@ -54,7 +54,7 @@ class AuthInterceptorTest {
 
     @Test
     void preHandle_ShouldAllowAccessIfAuthenticationSucceeds() throws Exception {
-        when(request.getRequestURI()).thenReturn("/Sports-Centre/protected");
+        when(request.getRequestURI()).thenReturn("/protected");
         when(authService.authenticateRequest(request)).thenReturn(true);
 
         boolean result = authInterceptor.preHandle(request, response, new Object());

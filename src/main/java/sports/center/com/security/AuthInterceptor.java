@@ -21,6 +21,13 @@ public class AuthInterceptor implements HandlerInterceptor {
             return true;
         }
 
+        if (requestURI.startsWith("/swagger-ui") || requestURI.startsWith("/v3/api-docs")
+                || requestURI.startsWith("/webjars/") || requestURI.equals("/actuator/health")
+                || requestURI.equals("/actuator/prometheus") || requestURI.equals("/health")) {
+            return true;
+        }
+
+
         if (!authService.authenticateRequest(request)) {
             log.warn("Unauthorized access attempt to {}", requestURI);
             response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Invalid username or password");

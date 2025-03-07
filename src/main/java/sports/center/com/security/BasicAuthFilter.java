@@ -29,6 +29,13 @@ public class BasicAuthFilter implements Filter {
             chain.doFilter(request, response);
             return;
         }
+        
+        if (httpRequest.getRequestURI().startsWith("/swagger-ui") || httpRequest.getRequestURI().startsWith("/v3/api-docs")
+                || httpRequest.getRequestURI().startsWith("/webjars/") || httpRequest.getRequestURI().equals("/actuator/health")
+                || httpRequest.getRequestURI().equals("/actuator/prometheus") || httpRequest.getRequestURI().equals("/health")) {
+            chain.doFilter(request, response);
+            return;
+        }
 
         String authHeader = httpRequest.getHeader("Authorization");
 

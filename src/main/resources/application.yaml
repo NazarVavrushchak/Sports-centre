@@ -3,7 +3,7 @@ server:
 
 spring:
   profiles:
-    active: dev
+    active: default
 
   datasource:
     url: ${DATASOURCE_URL}
@@ -13,7 +13,7 @@ spring:
 
   jpa:
     hibernate:
-      ddl-auto:  update
+      ddl-auto: update
     show-sql: false
     properties:
       hibernate:
@@ -22,3 +22,72 @@ spring:
   flyway:
     enabled: true
     baseline-on-migrate: true
+
+management:
+  endpoint:
+    health:
+      show-details: always
+  endpoints:
+    web:
+      exposure:
+        include: "health,info,metrics,prometheus"
+  health:
+    db:
+      enabled: true
+    defaults:
+      enabled: true
+
+  metrics:
+    tags:
+      application: "sports-center-app"
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
+---
+server:
+  port: 8081
+
+spring:
+  config:
+    activate:
+      on-profile: local
+  datasource:
+    url: ${DATASOURCE_URL_LOCAL}
+    username: ${DATASOURCE_USER_LOCAL}
+    password: ${DATASOURCE_PASSWORD_LOCAL}
+---
+server:
+  port: 8082
+
+spring:
+  config:
+    activate:
+      on-profile: dev
+  datasource:
+    url: ${DATASOURCE_URL_DEV}
+    username: ${DATASOURCE_USER_DEV}
+    password: ${DATASOURCE_PASSWORD_DEV}
+---
+server:
+  port: 8083
+
+spring:
+  config:
+    activate:
+      on-profile: stg
+  datasource:
+    url: ${DATASOURCE_URL_STG}
+    username: ${DATASOURCE_USER_STG}
+    password: ${DATASOURCE_PASSWORD_STG}
+---
+server:
+  port: 8084
+
+spring:
+  config:
+    activate:
+      on-profile: prod
+  datasource:
+    url: ${DATASOURCE_URL_PROD}
+    username: ${DATASOURCE_USER_PROD}
+    password: ${DATASOURCE_PASSWORD_PROD}
