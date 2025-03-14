@@ -21,7 +21,7 @@ public class TrainerResponseDto {
     private Boolean isActive;
     private Long specializationId;
     private String specializationName;
-
     @Singular
     List<TraineeResponseDto> trainees;
+    private String token;
 }

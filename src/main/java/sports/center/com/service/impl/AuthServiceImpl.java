@@ -1,78 +1,53 @@
 package sports.center.com.service.impl;
 
-import jakarta.persistence.EntityManager;
-import jakarta.persistence.EntityManagerFactory;
-import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.AuthenticationException;
 import org.springframework.stereotype.Service;
+import sports.center.com.dto.security.AuthResponse;
+import sports.center.com.security.BruteForceLoginProtection;
+import sports.center.com.security.JwtTool;
 import sports.center.com.service.AuthService;
+import sports.center.com.service.UserService;
 
-import java.nio.charset.StandardCharsets;
-import java.util.Base64;
+import java.util.HashSet;
+import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
 @Slf4j
 public class AuthServiceImpl implements AuthService {
-    private final EntityManagerFactory entityManagerFactory;
+    private final AuthenticationManager authenticationManager;
+    private final BruteForceLoginProtection bruteForceLoginProtection;
+    private final JwtTool jwtTool;
+    private final UserService userService;
 
-    private EntityManager getEntityManager() {
-        return entityManagerFactory.createEntityManager();
-    }
+    private final Set<String> blacklistedTokens = new HashSet<>();
 
     @Override
-    public boolean authenticateTrainee(String username, String password) {
-        EntityManager em = getEntityManager();
+    public AuthResponse authenticateAndGenerateToken(String username, String password, String ipAddress) {
+        log.info("Login attempt for username: {}", username);
+
+        if (userService.isAccountLocked(username) && !userService.unlockWhenTimeExpired(username)) {
+            log.warn("Login attempt blocked for locked account: {}", username);
+            throw new AuthenticationException("Account locked due to excessive failed attempts") {
+            };
+        }
+
         try {
-            return em.createQuery(
-                            "SELECT COUNT(t) FROM Trainee t WHERE t.username = :username AND t.password = :password",
-                            Long.class
-                    )
-                    .setParameter("username", username)
-                    .setParameter("password", password)
-                    .getSingleResult() > 0;
-        } finally {
-            em.close();
+            Authentication authentication = authenticationManager.authenticate(
+                    new UsernamePasswordAuthenticationToken(username, password));
+            String token = jwtTool.generateToken(username);
+            bruteForceLoginProtection.registerSuccessfulLogin(username, ipAddress);
+            log.info("JWT generated for username: {}", username);
+            return new AuthResponse(token);
+        } catch (AuthenticationException e) {
+            log.warn("Authentication failed for username: {}", username);
+            bruteForceLoginProtection.registerFailedAttempt(username, ipAddress);
+            throw e;
         }
     }
-
-    @Override
-    public boolean authenticateTrainer(String username, String password) {
-        EntityManager em = getEntityManager();
-        try {
-            return em.createQuery(
-                            "SELECT COUNT(t) FROM Trainer t WHERE t.username = :username AND t.password = :password",
-                            Long.class
-                    )
-                    .setParameter("username", username)
-                    .setParameter("password", password)
-                    .getSingleResult() > 0;
-        } finally {
-            em.close();
-        }
-    }
-
-    @Override
-    public boolean authenticateRequest(HttpServletRequest request) {
-        String authHeader = request.getHeader("Authorization");
-
-        if (authHeader == null || !authHeader.startsWith("Basic ")) {
-            return false;
-        }
-
-        String base64Credentials = authHeader.substring("Basic ".length());
-        String credentials = new String(Base64.getDecoder().decode(base64Credentials), StandardCharsets.UTF_8);
-        String[] values = credentials.split(":", 2);
-
-        if (values.length != 2) {
-            return false;
-        }
-
-        String username = values[0];
-        String password = values[1];
-
-        return authenticateTrainee(username, password) || authenticateTrainer(username, password);
-    }
-
 }

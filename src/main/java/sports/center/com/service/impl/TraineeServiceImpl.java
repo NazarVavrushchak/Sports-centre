@@ -1,11 +1,12 @@
 package sports.center.com.service.impl;
 
-import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.Validator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.slf4j.MDC;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import sports.center.com.dto.trainee.TraineeRequestDto;
@@ -17,12 +18,12 @@ import sports.center.com.exception.exceptions.TraineeNotFoundException;
 import sports.center.com.exception.exceptions.UnauthorizedException;
 import sports.center.com.model.Trainee;
 import sports.center.com.repository.TraineeRepository;
+import sports.center.com.security.JwtTool;
 import sports.center.com.service.TraineeService;
+import sports.center.com.service.UserService;
 import sports.center.com.util.PasswordUtil;
 import sports.center.com.util.UsernameUtil;
 
-import java.nio.charset.StandardCharsets;
-import java.util.Base64;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
@@ -36,7 +37,9 @@ public class TraineeServiceImpl implements TraineeService {
     private final TraineeRepository traineeRepository;
     private final UsernameUtil usernameUtil;
     private final Validator validator;
-    private final HttpServletRequest request;
+    private final PasswordEncoder passwordEncoder;
+    private final UserService userService;
+    private final JwtTool jwtTool;
 
     @Override
     public TraineeResponseDto createTrainee(TraineeRequestDto traineeRequestDto) {
@@ -45,27 +48,30 @@ public class TraineeServiceImpl implements TraineeService {
                 transactionId, traineeRequestDto.getFirstName(), traineeRequestDto.getLastName());
 
         String username = usernameUtil.generateUsername(traineeRequestDto.getFirstName(), traineeRequestDto.getLastName());
-
         String password = PasswordUtil.generatePassword();
 
         Trainee trainee = new Trainee();
         trainee.setFirstName(traineeRequestDto.getFirstName());
         trainee.setLastName(traineeRequestDto.getLastName());
         trainee.setUsername(username);
-        trainee.setPassword(password);
+        trainee.setPassword(passwordEncoder.encode(password));
         trainee.setIsActive(true);
         trainee.setDateOfBirth(traineeRequestDto.getDateOfBirth());
         trainee.setAddress(traineeRequestDto.getAddress());
+        userService.initializeNewUser(trainee);
 
         traineeRepository.save(trainee);
+        String token = jwtTool.generateToken(trainee.getUsername());
         log.info("Transaction [{}] - Trainee created successfully: {}", transactionId, trainee.getUsername());
 
         return TraineeResponseDto.builder()
                 .username(username)
                 .password(password)
+                .token(token)
                 .build();
     }
 
+    @Override
     public TraineeResponseDto getTraineeProfile() {
         String transactionId = MDC.get("transactionId");
         String username = getAuthenticatedUsername();
@@ -79,6 +85,7 @@ public class TraineeServiceImpl implements TraineeService {
                 });
     }
 
+    @Override
     public boolean changeTraineePassword(String newPassword) {
         String transactionId = MDC.get("transactionId");
         String username = getAuthenticatedUsername();
@@ -87,8 +94,7 @@ public class TraineeServiceImpl implements TraineeService {
         validatePassword(newPassword);
 
         Trainee trainee = getTraineeOrThrow(username);
-        trainee.setPassword(newPassword);
-
+        trainee.setPassword(passwordEncoder.encode(newPassword));
         traineeRepository.save(trainee);
         log.info("Transaction [{}] - Password changed successfully for trainee: {}", transactionId, username);
 
@@ -126,7 +132,6 @@ public class TraineeServiceImpl implements TraineeService {
         if (request.getFirstName() != null && request.getLastName() != null &&
                 (!Objects.equals(trainee.getFirstName(), request.getFirstName()) ||
                         !Objects.equals(trainee.getLastName(), request.getLastName()))) {
-
             trainee.setUsername(usernameUtil.generateUsername(request.getFirstName(), request.getLastName()));
         }
     }
@@ -160,10 +165,10 @@ public class TraineeServiceImpl implements TraineeService {
 
     private void validateRequest(TraineeRequestDto request) {
         String transactionId = MDC.get("transactionId");
-        Set<jakarta.validation.ConstraintViolation<TraineeRequestDto>> violations = validator.validate(request);
+        Set<ConstraintViolation<TraineeRequestDto>> violations = validator.validate(request);
         if (!violations.isEmpty()) {
             String errors = violations.stream()
-                    .map(jakarta.validation.ConstraintViolation::getMessage)
+                    .map(ConstraintViolation::getMessage)
                     .collect(Collectors.joining(", "));
             log.warn("Transaction [{}] - Validation failed: {}", transactionId, errors);
 
@@ -197,42 +202,18 @@ public class TraineeServiceImpl implements TraineeService {
 
     private String getAuthenticatedUsername() {
         String transactionId = MDC.get("transactionId");
-        String authHeader = request.getHeader("Authorization");
-
-        if (authHeader != null && authHeader.startsWith("Basic ")) {
-            String base64Credentials = authHeader.substring("Basic ".length());
-            String credentials = new String(Base64.getDecoder().decode(base64Credentials), StandardCharsets.UTF_8);
-            String[] values = credentials.split(":", 2);
-
-            if (values.length != 2) {
-                log.warn("Transaction [{}] - Invalid authentication format", transactionId);
-                throw new UnauthorizedException("Invalid authentication format");
+        try {
+            String username = SecurityContextHolder.getContext().getAuthentication().getName();
+            if (username == null || username.isEmpty()) {
+                log.warn("Transaction [{}] - No authenticated user found", transactionId);
+                throw new UnauthorizedException("No authenticated user found");
             }
-
-            String username = values[0];
-            String password = values[1];
-
-            log.info("Attempting authentication for username: {}", username);
-
-            Optional<Trainee> traineeOptional = traineeRepository.findByUsername(username);
-            if (traineeOptional.isEmpty()) {
-                log.warn("Transaction [{}] - Authentication failed: username {} not found", transactionId, username);
-                throw new UnauthorizedException("Invalid username or password");
-            }
-
-            Trainee trainee = traineeOptional.get();
-
-            if (!trainee.getPassword().equals(password)) {
-                log.warn("Transaction [{}] - Authentication failed: incorrect password for user {}", transactionId, username);
-                throw new UnauthorizedException("Invalid username or password");
-            }
-
-            log.info("Transaction [{}] - Authentication successful for user: {}", transactionId, username);
+            log.info("Transaction [{}] - Authenticated user: {}", transactionId, username);
             return username;
+        } catch (Exception e) {
+            log.warn("Transaction [{}] - Unauthorized request: {}", transactionId, e.getMessage());
+            throw new UnauthorizedException("Unauthorized request");
         }
-
-        log.warn("Transaction [{}] - Unauthorized request", transactionId);
-        throw new UnauthorizedException("Unauthorized request");
     }
 
     private TraineeResponseDto mapToResponseWithUsername(Trainee trainee) {
@@ -249,8 +230,7 @@ public class TraineeServiceImpl implements TraineeService {
                                 .firstName(trainer.getFirstName())
                                 .lastName(trainer.getLastName())
                                 .specializationId(trainer.getSpecialization().getId())
-                                .build()
-                        )
+                                .build())
                         .collect(Collectors.toList()))
                 .build();
     }
@@ -268,8 +248,7 @@ public class TraineeServiceImpl implements TraineeService {
                                 .firstName(trainer.getFirstName())
                                 .lastName(trainer.getLastName())
                                 .specializationId(trainer.getSpecialization().getId())
-                                .build()
-                        )
+                                .build())
                         .collect(Collectors.toList()))
                 .build();
     }

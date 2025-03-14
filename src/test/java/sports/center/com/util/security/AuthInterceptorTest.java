@@ -6,7 +6,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
-import sports.center.com.security.AuthInterceptor;
 import sports.center.com.service.AuthService;
 
 import static org.junit.jupiter.api.Assertions.*;

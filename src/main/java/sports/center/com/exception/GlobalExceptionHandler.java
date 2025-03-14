@@ -4,10 +4,14 @@ import jakarta.validation.ConstraintViolation;
 import jakarta.validation.ConstraintViolationException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.core.AuthenticationException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import sports.center.com.dto.security.ErrorResponse;
 import sports.center.com.exception.exceptions.*;
 
 import java.util.HashMap;
@@ -92,6 +96,25 @@ public class GlobalExceptionHandler {
         log.error("[{}] Internal Error: {}", transactionId, e.getMessage(), e);
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body("Internal Server Error. Transaction ID: " + transactionId);
+    }
+
+    @ExceptionHandler(BadCredentialsException.class)
+    public ResponseEntity<ErrorResponse> handleBadCredentials(BadCredentialsException ex) {
+        log.warn("Authentication failed: {}", ex.getMessage());
+        ErrorResponse error = new ErrorResponse("Invalid username or password");
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(error);
+    }
+
+    @ExceptionHandler(AuthenticationException.class)
+    public ResponseEntity<String> handleAuthenticationException(AuthenticationException ex) {
+        log.warn("Authentication failed: {}", ex.getMessage());
+        String message = ex.getMessage().contains("locked")
+                ? ex.getMessage()
+                : "Invalid credentials";
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body("{\"error\": \"" + message + "\"}");
     }
 
     private ResponseEntity<Map<String, String>> buildErrorResponse(String message, HttpStatus status) {

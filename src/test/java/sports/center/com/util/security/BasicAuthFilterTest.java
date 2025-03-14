@@ -10,7 +10,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import sports.center.com.security.BasicAuthFilter;
 import sports.center.com.service.AuthService;
 
 import java.io.IOException;
