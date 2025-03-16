@@ -1,128 +1,208 @@
 package sports.center.com.util.service_impl;
 
-import jakarta.persistence.EntityManager;
-import jakarta.persistence.EntityManagerFactory;
-import jakarta.persistence.TypedQuery;
-import jakarta.servlet.http.HttpServletRequest;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.userdetails.User;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import sports.center.com.dto.security.AuthResponse;
+import sports.center.com.security.BruteForceLoginProtection;
+import sports.center.com.security.CustomUserDetailsService;
+import sports.center.com.security.JwtTool;
+import sports.center.com.service.UserService;
 import sports.center.com.service.impl.AuthServiceImpl;
 
-import java.util.Base64;
-
 import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class AuthServiceImplTest {
 
     @Mock
-    private EntityManagerFactory entityManagerFactory;
+    private BruteForceLoginProtection bruteForceLoginProtection;
 
     @Mock
-    private EntityManager entityManager;
+    private JwtTool jwtTool;
 
     @Mock
-    private TypedQuery<Long> query;
+    private UserService userService;
 
     @Mock
-    private HttpServletRequest request;
+    private CustomUserDetailsService userDetailsService;
+
+    @Mock
+    private PasswordEncoder passwordEncoder;
 
     @InjectMocks
     private AuthServiceImpl authService;
 
+    private String username;
+    private String password;
+    private String ipAddress;
+
     @BeforeEach
     void setUp() {
-        lenient().when(entityManagerFactory.createEntityManager()).thenReturn(entityManager);
-        lenient().when(entityManager.createQuery(anyString(), eq(Long.class))).thenReturn(query);
-        lenient().when(query.setParameter(anyString(), any())).thenReturn(query);
+        username = "testUser";
+        password = "testPass";
+        ipAddress = "127.0.0.1";
     }
 
     @Test
-    void authenticateTrainee_Success() {
-        when(query.getSingleResult()).thenReturn(1L);
+    void authenticateAndGenerateToken_Success_ShouldReturnToken() {
+        String token = "jwt-token";
+        UserDetails userDetails = new User(username, "hashedPassword", java.util.Collections.emptyList());
+        when(userService.isAccountLocked(username)).thenReturn(false);
+        when(userDetailsService.loadUserByUsername(username)).thenReturn(userDetails);
+        when(passwordEncoder.matches(password, "hashedPassword")).thenReturn(true);
+        when(jwtTool.generateToken(username)).thenReturn(token);
 
-        boolean result = authService.authenticateTrainee("john.doe", "password123");
+        ResponseEntity<AuthResponse> response = authService.authenticateAndGenerateToken(username, password, ipAddress);
 
-        assertTrue(result);
-        verify(entityManager).close();
+        assertNotNull(response);
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertNotNull(response.getBody());
+        assertEquals(token, response.getBody().getToken());
+        verify(userService).isAccountLocked(username);
+        verify(userDetailsService).loadUserByUsername(username);
+        verify(passwordEncoder).matches(password, "hashedPassword");
+        verify(jwtTool).generateToken(username);
+        verify(bruteForceLoginProtection).registerSuccessfulLogin(username, ipAddress);
+        verifyNoMoreInteractions(userService, userDetailsService, passwordEncoder, jwtTool, bruteForceLoginProtection);
     }
 
     @Test
-    void authenticateTrainee_Failure() {
-        when(query.getSingleResult()).thenReturn(0L);
+    void authenticateAndGenerateToken_AccountLocked_ShouldReturnUnauthorized() {
+        when(userService.isAccountLocked(username)).thenReturn(true);
+        when(userService.unlockWhenTimeExpired(username)).thenReturn(false);
 
-        boolean result = authService.authenticateTrainee("wrong.user", "wrongPass");
+        ResponseEntity<AuthResponse> response = authService.authenticateAndGenerateToken(username, password, ipAddress);
 
-        assertFalse(result);
-        verify(entityManager).close();
+        assertNotNull(response);
+        assertEquals(HttpStatus.UNAUTHORIZED, response.getStatusCode());
+        assertNotNull(response.getBody());
+        assertNull(response.getBody().getToken());
+        verify(userService).isAccountLocked(username);
+        verify(userService).unlockWhenTimeExpired(username);
+        verifyNoInteractions(userDetailsService, passwordEncoder, jwtTool, bruteForceLoginProtection);
     }
 
     @Test
-    void authenticateTrainer_Success() {
-        when(query.getSingleResult()).thenReturn(1L);
+    void authenticateAndGenerateToken_AccountLockedThenUnlocked_ShouldSucceed() {
+        String token = "jwt-token";
+        UserDetails userDetails = new User(username, "hashedPassword", java.util.Collections.emptyList());
+        when(userService.isAccountLocked(username)).thenReturn(true);
+        when(userService.unlockWhenTimeExpired(username)).thenReturn(true);
+        when(userDetailsService.loadUserByUsername(username)).thenReturn(userDetails);
+        when(passwordEncoder.matches(password, "hashedPassword")).thenReturn(true);
+        when(jwtTool.generateToken(username)).thenReturn(token);
 
-        boolean result = authService.authenticateTrainer("trainer.john", "trainerPass");
+        ResponseEntity<AuthResponse> response = authService.authenticateAndGenerateToken(username, password, ipAddress);
 
-        assertTrue(result);
-        verify(entityManager).close();
+        assertNotNull(response);
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertNotNull(response.getBody());
+        assertEquals(token, response.getBody().getToken());
+        verify(userService).isAccountLocked(username);
+        verify(userService).unlockWhenTimeExpired(username);
+        verify(userDetailsService).loadUserByUsername(username);
+        verify(passwordEncoder).matches(password, "hashedPassword");
+        verify(jwtTool).generateToken(username);
+        verify(bruteForceLoginProtection).registerSuccessfulLogin(username, ipAddress);
+        verifyNoMoreInteractions(userService, userDetailsService, passwordEncoder, jwtTool, bruteForceLoginProtection);
     }
 
     @Test
-    void authenticateTrainer_Failure() {
-        when(query.getSingleResult()).thenReturn(0L);
+    void authenticateAndGenerateToken_UserNotFound_ShouldReturnUnauthorized() {
+        when(userService.isAccountLocked(username)).thenReturn(false);
+        when(userDetailsService.loadUserByUsername(username)).thenThrow(new UsernameNotFoundException("User not found"));
 
-        boolean result = authService.authenticateTrainer("wrong.trainer", "wrongPass");
+        ResponseEntity<AuthResponse> response = authService.authenticateAndGenerateToken(username, password, ipAddress);
 
-        assertFalse(result);
-        verify(entityManager).close();
+        assertNotNull(response);
+        assertEquals(HttpStatus.UNAUTHORIZED, response.getStatusCode());
+        assertNotNull(response.getBody());
+        assertNull(response.getBody().getToken());
+        verify(userService).isAccountLocked(username);
+        verify(userDetailsService).loadUserByUsername(username);
+        verify(bruteForceLoginProtection).registerFailedAttempt(username, ipAddress);
+        verifyNoInteractions(passwordEncoder, jwtTool);
     }
 
     @Test
-    void authenticateRequest_InvalidAuthFormat_ShouldReturnFalse() {
-        when(request.getHeader("Authorization")).thenReturn("Bearer token123");
+    void authenticateAndGenerateToken_InvalidPassword_ShouldReturnUnauthorized() {
+        UserDetails userDetails = new User(username, "hashedPassword", java.util.Collections.emptyList());
+        when(userService.isAccountLocked(username)).thenReturn(false);
+        when(userDetailsService.loadUserByUsername(username)).thenReturn(userDetails);
+        when(passwordEncoder.matches(password, "hashedPassword")).thenReturn(false);
 
-        assertFalse(authService.authenticateRequest(request));
+        ResponseEntity<AuthResponse> response = authService.authenticateAndGenerateToken(username, password, ipAddress);
+
+        assertNotNull(response);
+        assertEquals(HttpStatus.UNAUTHORIZED, response.getStatusCode());
+        assertNotNull(response.getBody());
+        assertNull(response.getBody().getToken());
+        verify(userService).isAccountLocked(username);
+        verify(userDetailsService).loadUserByUsername(username);
+        verify(passwordEncoder).matches(password, "hashedPassword");
+        verify(bruteForceLoginProtection).registerFailedAttempt(username, ipAddress);
+        verifyNoInteractions(jwtTool);
     }
 
     @Test
-    void authenticateRequest_InvalidCredentialFormat_ShouldReturnFalse() {
-        String encoded = Base64.getEncoder().encodeToString("invalidFormat".getBytes());
-        when(request.getHeader("Authorization")).thenReturn("Basic " + encoded);
+    void authenticateAndGenerateToken_JwtGenerationFails_ShouldReturnUnauthorized() {
+        UserDetails userDetails = new User(username, "hashedPassword", java.util.Collections.emptyList());
+        when(userService.isAccountLocked(username)).thenReturn(false);
+        when(userDetailsService.loadUserByUsername(username)).thenReturn(userDetails);
+        when(passwordEncoder.matches(password, "hashedPassword")).thenReturn(true);
+        when(jwtTool.generateToken(username)).thenThrow(new RuntimeException("JWT generation failed"));
 
-        assertFalse(authService.authenticateRequest(request));
+        ResponseEntity<AuthResponse> response = authService.authenticateAndGenerateToken(username, password, ipAddress);
+
+        assertNotNull(response);
+        assertEquals(HttpStatus.UNAUTHORIZED, response.getStatusCode());
+        assertNotNull(response.getBody());
+        assertNull(response.getBody().getToken());
+
+        verify(userService).isAccountLocked(username);
+        verify(userDetailsService).loadUserByUsername(username);
+        verify(passwordEncoder).matches(password, "hashedPassword");
+        verify(jwtTool).generateToken(username);
+        verify(bruteForceLoginProtection).registerFailedAttempt(username, ipAddress);
+        verifyNoMoreInteractions(userService, userDetailsService, passwordEncoder, jwtTool, bruteForceLoginProtection);
     }
 
     @Test
-    void authenticateRequest_ValidTrainee_ShouldReturnTrue() {
-        String encoded = Base64.getEncoder().encodeToString("john.doe:password123".getBytes());
-        when(request.getHeader("Authorization")).thenReturn("Basic " + encoded);
-        when(query.getSingleResult()).thenReturn(1L);
+    void authenticateAndGenerateToken_ThreeFailedAttempts_ShouldLockAccount() {
+        UserDetails userDetails = new User(username, "hashedPassword", java.util.Collections.emptyList());
+        when(userService.isAccountLocked(username)).thenReturn(false);
+        when(userDetailsService.loadUserByUsername(username)).thenReturn(userDetails);
+        when(passwordEncoder.matches(password, "hashedPassword")).thenReturn(false);
 
-        assertTrue(authService.authenticateRequest(request));
-    }
+        for (int i = 0; i < 3; i++) {
+            ResponseEntity<AuthResponse> response = authService.authenticateAndGenerateToken(username, password, ipAddress);
+            assertEquals(HttpStatus.UNAUTHORIZED, response.getStatusCode());
+            assertNull(response.getBody().getToken());
+        }
 
-    @Test
-    void authenticateRequest_ValidTrainer_ShouldReturnTrue() {
-        String encoded = Base64.getEncoder().encodeToString("trainer.john:trainerPass".getBytes());
-        when(request.getHeader("Authorization")).thenReturn("Basic " + encoded);
-        when(query.getSingleResult()).thenReturn(1L);
+        when(userService.isAccountLocked(username)).thenReturn(true);
+        when(userService.unlockWhenTimeExpired(username)).thenReturn(false);
 
-        assertTrue(authService.authenticateRequest(request));
-    }
+        ResponseEntity<AuthResponse> response = authService.authenticateAndGenerateToken(username, password, ipAddress);
+        assertEquals(HttpStatus.UNAUTHORIZED, response.getStatusCode());
+        assertNull(response.getBody().getToken());
 
-    @Test
-    void authenticateRequest_WrongCredentials_ShouldReturnFalse() {
-        String encoded = Base64.getEncoder().encodeToString("wrong.user:wrongPass".getBytes());
-        when(request.getHeader("Authorization")).thenReturn("Basic " + encoded);
-        when(query.getSingleResult()).thenReturn(0L);
-
-        assertFalse(authService.authenticateRequest(request));
+        verify(userService, times(4)).isAccountLocked(username);
+        verify(userDetailsService, times(3)).loadUserByUsername(username);
+        verify(passwordEncoder, times(3)).matches(password, "hashedPassword");
+        verify(bruteForceLoginProtection, times(3)).registerFailedAttempt(username, ipAddress);
+        verify(userService).unlockWhenTimeExpired(username);
+        verifyNoInteractions(jwtTool);
     }
 }

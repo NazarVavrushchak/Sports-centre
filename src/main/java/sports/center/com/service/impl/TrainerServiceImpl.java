@@ -95,7 +95,7 @@ public class TrainerServiceImpl implements TrainerService {
         validatePassword(newPassword);
 
         Trainer trainer = getTrainerOrThrow(username);
-        trainer.setPassword(passwordEncoder.encode(newPassword)); // Hash the new password
+        trainer.setPassword(passwordEncoder.encode(newPassword));
         trainerRepository.save(trainer);
 
         log.info("[{}] Trainer password changed successfully: {}", transactionId, username);
@@ -109,7 +109,7 @@ public class TrainerServiceImpl implements TrainerService {
         String username = getAuthenticatedUsername();
         log.info("[{}] Updating trainer profile: {}", transactionId, username);
 
-        validateRequest(request); // Validate the request
+        validateRequest(request);
 
         Trainer trainer = findTrainerByUsername(username);
 
@@ -117,7 +117,6 @@ public class TrainerServiceImpl implements TrainerService {
         trainer.setLastName(request.getLastName());
         trainer.setIsActive(request.getIsActive());
 
-        // Update specialization if provided
         if (request.getSpecializationId() != null) {
             TrainingType specialization = trainingTypeRepository.findById(request.getSpecializationId())
                     .orElseThrow(() -> new SpecializationNotFoundException(request.getSpecializationId()));

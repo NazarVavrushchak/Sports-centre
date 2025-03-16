@@ -48,7 +48,6 @@ class TrainerControllerTest {
 
     @Test
     void shouldRegisterTrainer() throws Exception {
-        TrainerRequestDto requestDto = new TrainerRequestDto("John", "Doe", 1L, true);
         TrainerResponseDto responseDto = TrainerResponseDto.builder()
                 .firstName("John")
                 .lastName("Doe")
@@ -105,7 +104,6 @@ class TrainerControllerTest {
 
     @Test
     void shouldUpdateTrainerProfile() throws Exception {
-        TrainerRequestDto requestDto = new TrainerRequestDto("Updated", "Trainer", 2L, true);
         TrainerResponseDto responseDto = TrainerResponseDto.builder()
                 .firstName("Updated")
                 .lastName("Trainer")

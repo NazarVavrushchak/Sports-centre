@@ -26,7 +26,7 @@ class DatabaseConnectionHealthIndicatorTest {
     private DatabaseConnectionHealthIndicator databaseHealthIndicator;
 
     @BeforeEach
-    void setUp() throws SQLException {
+    void setUp() {
         MockitoAnnotations.openMocks(this);
         databaseHealthIndicator = new DatabaseConnectionHealthIndicator(dataSource);
     }

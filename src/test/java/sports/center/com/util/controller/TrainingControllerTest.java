@@ -61,8 +61,6 @@ class TrainingControllerTest {
 
     @Test
     void shouldUpdateTraineeTrainers() throws Exception {
-        List<String> trainerUsernames = List.of("trainer1", "trainer2");
-
         List<TrainerResponseDto> updatedTrainers = List.of(
                 TrainerResponseDto.builder().username("trainer1").build(),
                 TrainerResponseDto.builder().username("trainer2").build()

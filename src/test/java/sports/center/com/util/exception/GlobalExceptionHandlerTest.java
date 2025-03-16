@@ -8,7 +8,10 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.core.AuthenticationException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import sports.center.com.dto.security.ErrorResponse;
 import sports.center.com.exception.GlobalExceptionHandler;
 import sports.center.com.exception.exceptions.BaseValidationException;
 import sports.center.com.exception.exceptions.EmptyTrainerListException;
@@ -102,5 +105,33 @@ class GlobalExceptionHandlerTest {
         ResponseEntity<Map<String, String>> response = globalExceptionHandler.handleBadRequestExceptions(exception);
         assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
         assertEquals("No trainers available", response.getBody().get("error"));
+    }
+
+    @Test
+    void shouldHandleBadCredentialsException() {
+        BadCredentialsException exception = new BadCredentialsException("Invalid username or password");
+        ResponseEntity<ErrorResponse> response = globalExceptionHandler.handleBadCredentials(exception);
+
+        assertEquals(HttpStatus.UNAUTHORIZED, response.getStatusCode());
+    }
+
+    @Test
+    void shouldHandleAuthenticationExceptionWithLockedMessage() {
+        AuthenticationException exception = new AuthenticationException("User account is locked") {
+        };
+        ResponseEntity<String> response = globalExceptionHandler.handleAuthenticationException(exception);
+
+        assertEquals(HttpStatus.UNAUTHORIZED, response.getStatusCode());
+        assertEquals("{\"error\": \"User account is locked\"}", response.getBody());
+    }
+
+    @Test
+    void shouldHandleAuthenticationExceptionWithInvalidCredentials() {
+        AuthenticationException exception = new AuthenticationException("Invalid login attempt") {
+        };
+        ResponseEntity<String> response = globalExceptionHandler.handleAuthenticationException(exception);
+
+        assertEquals(HttpStatus.UNAUTHORIZED, response.getStatusCode());
+        assertEquals("{\"error\": \"Invalid credentials\"}", response.getBody());
     }
 }
