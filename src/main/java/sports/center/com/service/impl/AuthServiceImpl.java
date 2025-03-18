@@ -31,7 +31,7 @@ public class AuthServiceImpl implements AuthService {
         if (userService.isAccountLocked(username) && !userService.unlockWhenTimeExpired(username)) {
             log.warn("Login attempt blocked for locked account: {}", username);
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                    .body(new AuthResponse(null));
+                    .body(new AuthResponse(null, "Account is locked"));
         }
 
         try {
@@ -42,14 +42,14 @@ public class AuthServiceImpl implements AuthService {
                 log.warn("User not found for username: {}", username);
                 bruteForceLoginProtection.registerFailedAttempt(username, ipAddress);
                 return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                        .body(new AuthResponse(null));
+                        .body(new AuthResponse(null, "Invalid username or password"));
             }
 
             if (!passwordEncoder.matches(password, userDetails.getPassword())) {
                 log.warn("Invalid password for username: {}", username);
                 bruteForceLoginProtection.registerFailedAttempt(username, ipAddress);
                 return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                        .body(new AuthResponse(null));
+                        .body(new AuthResponse(null, "Invalid username or password"));
             }
 
             String token = jwtTool.generateToken(username);
@@ -61,7 +61,7 @@ public class AuthServiceImpl implements AuthService {
             log.warn("Authentication failed for username: {}", username, e);
             bruteForceLoginProtection.registerFailedAttempt(username, ipAddress);
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                    .body(new AuthResponse(null));
+                    .body(new AuthResponse(null, "Authentication failed: " + e.getMessage()));
         }
     }
 }
