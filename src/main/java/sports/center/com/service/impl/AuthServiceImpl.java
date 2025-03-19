@@ -28,40 +28,68 @@ public class AuthServiceImpl implements AuthService {
     public ResponseEntity<AuthResponse> authenticateAndGenerateToken(String username, String password, String ipAddress) {
         log.info("Login attempt for username: {}", username);
 
-        if (userService.isAccountLocked(username) && !userService.unlockWhenTimeExpired(username)) {
+        AuthResponse authResponse = processAuthentication(username, password, ipAddress);
+        return buildResponse(authResponse);
+    }
+
+    private AuthResponse processAuthentication(String username, String password, String ipAddress) {
+        if (isAccountLocked(username)) {
             log.warn("Login attempt blocked for locked account: {}", username);
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                    .body(new AuthResponse(null, "Account is locked"));
+            return new AuthResponse(null, "Account is locked");
         }
 
         try {
-            UserDetails userDetails;
-            try {
-                userDetails = userDetailsService.loadUserByUsername(username);
-            } catch (org.springframework.security.core.userdetails.UsernameNotFoundException e) {
-                log.warn("User not found for username: {}", username);
-                bruteForceLoginProtection.registerFailedAttempt(username, ipAddress);
-                return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                        .body(new AuthResponse(null, "Invalid username or password"));
+            UserDetails userDetails = loadUserDetails(username);
+            if (userDetails == null) {
+                return handleFailedAttempt(username, ipAddress, "Invalid username or password");
             }
 
-            if (!passwordEncoder.matches(password, userDetails.getPassword())) {
-                log.warn("Invalid password for username: {}", username);
-                bruteForceLoginProtection.registerFailedAttempt(username, ipAddress);
-                return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                        .body(new AuthResponse(null, "Invalid username or password"));
+            if (!isPasswordValid(password, userDetails)) {
+                return handleFailedAttempt(username, ipAddress, "Invalid username or password");
             }
 
-            String token = jwtTool.generateToken(username);
-            bruteForceLoginProtection.registerSuccessfulLogin(username, ipAddress);
-            log.info("JWT generated for username: {}", username);
-            return ResponseEntity.ok(new AuthResponse(token));
-
+            return handleSuccessfulLogin(username, ipAddress);
         } catch (Exception e) {
             log.warn("Authentication failed for username: {}", username, e);
             bruteForceLoginProtection.registerFailedAttempt(username, ipAddress);
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                    .body(new AuthResponse(null, "Authentication failed: " + e.getMessage()));
+            return new AuthResponse(null, "Authentication failed: " + e.getMessage());
         }
+    }
+
+    private boolean isAccountLocked(String username) {
+        return userService.isAccountLocked(username) && !userService.unlockWhenTimeExpired(username);
+    }
+
+    private UserDetails loadUserDetails(String username) {
+        try {
+            return userDetailsService.loadUserByUsername(username);
+        } catch (org.springframework.security.core.userdetails.UsernameNotFoundException e) {
+            log.warn("User not found for username: {}", username);
+            return null;
+        }
+    }
+
+    private boolean isPasswordValid(String password, UserDetails userDetails) {
+        return passwordEncoder.matches(password, userDetails.getPassword());
+    }
+
+    private AuthResponse handleFailedAttempt(String username, String ipAddress, String errorMessage) {
+        bruteForceLoginProtection.registerFailedAttempt(username, ipAddress);
+        log.warn("Failed login attempt for username: {} - {}", username, errorMessage);
+        return new AuthResponse(null, errorMessage);
+    }
+
+    private AuthResponse handleSuccessfulLogin(String username, String ipAddress) {
+        String token = jwtTool.generateToken(username);
+        bruteForceLoginProtection.registerSuccessfulLogin(username, ipAddress);
+        log.info("JWT generated for username: {}", username);
+        return new AuthResponse(token);
+    }
+
+    private ResponseEntity<AuthResponse> buildResponse(AuthResponse authResponse) {
+        if (authResponse.getToken() != null) {
+            return ResponseEntity.ok(authResponse);
+        }
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(authResponse);
     }
 }

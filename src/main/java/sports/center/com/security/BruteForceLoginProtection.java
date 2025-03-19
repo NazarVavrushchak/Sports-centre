@@ -58,33 +58,54 @@ public class BruteForceLoginProtection extends OncePerRequestFilter {
         log.debug("Transaction [{}] - Filtering request for IP: {}, username: {}",
                 transactionId, ipAddress, username);
 
-        IpBlockInfo ipInfo = ipAttempts.get(ipAddress);
-        if (ipInfo != null) {
-            int ipFailedAttempts = ipInfo.getAttempts();
-            long lockTime = ipInfo.getLockTime();
-            long currentTime = System.currentTimeMillis();
-
-            if (ipFailedAttempts >= MAX_FAILED_ATTEMPTS) {
-                if (lockTime + LOCK_TIME_DURATION < currentTime) {
-                    log.info("Transaction [{}] - Unlocking IP: {} after timeout", transactionId, ipAddress);
-                    ipAttempts.remove(ipAddress);
-                } else {
-                    log.warn("Transaction [{}] - IP {} blocked due to excessive login attempts",
-                            transactionId, ipAddress);
-                    sendErrorResponse(response, HttpServletResponse.SC_FORBIDDEN,
-                            "IP blocked due to excessive login attempts", ipInfo.getLockTime());
-                    return;
-                }
-            }
+        if (isIpBlocked(ipAddress, transactionId, response)) {
+            return;
         }
 
         chain.doFilter(wrappedRequest, response);
+    }
+
+    private boolean isIpBlocked(String ipAddress, String transactionId, HttpServletResponse response)
+            throws IOException {
+        IpBlockInfo ipInfo = ipAttempts.get(ipAddress);
+        if (ipInfo == null) {
+            return false;
+        }
+
+        int ipFailedAttempts = ipInfo.getAttempts();
+        long lockTime = ipInfo.getLockTime();
+        long currentTime = System.currentTimeMillis();
+
+        if (ipFailedAttempts < MAX_FAILED_ATTEMPTS) {
+            return false;
+        }
+
+        if (isLockExpired(lockTime, currentTime)) {
+            log.info("Transaction [{}] - Unlocking IP: {} after timeout", transactionId, ipAddress);
+            ipAttempts.remove(ipAddress);
+            return false;
+        }
+
+        log.warn("Transaction [{}] - IP {} blocked due to excessive login attempts", transactionId, ipAddress);
+        sendErrorResponse(response, HttpServletResponse.SC_FORBIDDEN,
+                "IP blocked due to excessive login attempts", ipInfo.getLockTime());
+        return true;
+    }
+
+    private boolean isLockExpired(long lockTime, long currentTime) {
+        return lockTime + LOCK_TIME_DURATION < currentTime;
     }
 
     public void registerFailedAttempt(String username, String ipAddress) {
         String transactionId = MDC.get("transactionId");
         log.info("Transaction [{}] - Registering failed login attempt for username: {} from IP: {}",
                 transactionId, username, ipAddress);
+
+        updateIpAttempts(ipAddress);
+        handleUserFailedAttempt(username, ipAddress, transactionId);
+    }
+
+    private void updateIpAttempts(String ipAddress) {
         ipAttempts.compute(ipAddress, (key, oldValue) -> {
             int newAttempts = oldValue != null ? oldValue.getAttempts() + 1 : 1;
             long lockTime = oldValue != null && oldValue.getAttempts() >= MAX_FAILED_ATTEMPTS
@@ -92,12 +113,19 @@ public class BruteForceLoginProtection extends OncePerRequestFilter {
                     : System.currentTimeMillis();
             return new IpBlockInfo(newAttempts, lockTime);
         });
-        if (username != null) {
-            userService.increaseFailedAttempts(username);
-            int attempts = ipAttempts.getOrDefault(ipAddress, new IpBlockInfo(0, 0)).getAttempts();
-            if (attempts >= MAX_FAILED_ATTEMPTS) {
-                userService.lock(username);
-            }
+    }
+
+    private void handleUserFailedAttempt(String username, String ipAddress, String transactionId) {
+        if (username == null) {
+            return;
+        }
+
+        userService.increaseFailedAttempts(username);
+        int attempts = ipAttempts.getOrDefault(ipAddress, new IpBlockInfo(0, 0)).getAttempts();
+        if (attempts >= MAX_FAILED_ATTEMPTS) {
+            userService.lock(username);
+            log.info("Transaction [{}] - Locked user: {} due to excessive attempts from IP: {}",
+                    transactionId, username, ipAddress);
         }
     }
 
@@ -127,20 +155,31 @@ public class BruteForceLoginProtection extends OncePerRequestFilter {
 
     private String extractUsernameFromBody(ContentCachingRequestWrapper request) {
         String transactionId = MDC.get("transactionId");
-        try {
-            if (request.getContentLength() > 0 && "POST".equalsIgnoreCase(request.getMethod())
-                    && request.getRequestURI().endsWith("/login")) {
-                String body = new String(request.getContentAsByteArray(), StandardCharsets.UTF_8);
-                JsonNode jsonNode = objectMapper.readTree(body);
-                String username = jsonNode.has("username") ? jsonNode.get("username").asText() : null;
-                log.debug("Transaction [{}] - Extracted username from body: {}", transactionId, username);
-                return username;
-            }
+
+        if (!isLoginRequest(request)) {
             return null;
+        }
+
+        try {
+            String body = new String(request.getContentAsByteArray(), StandardCharsets.UTF_8);
+            return extractUsernameFromJsonBody(body, transactionId);
         } catch (IOException e) {
             log.warn("Transaction [{}] - Failed to extract username from request body: {}",
                     transactionId, e.getMessage());
             return null;
         }
+    }
+
+    private boolean isLoginRequest(ContentCachingRequestWrapper request) {
+        return request.getContentLength() > 0
+                && "POST".equalsIgnoreCase(request.getMethod())
+                && request.getRequestURI().endsWith("/login");
+    }
+
+    private String extractUsernameFromJsonBody(String body, String transactionId) throws IOException {
+        JsonNode jsonNode = objectMapper.readTree(body);
+        String username = jsonNode.has("username") ? jsonNode.get("username").asText() : null;
+        log.debug("Transaction [{}] - Extracted username from body: {}", transactionId, username);
+        return username;
     }
 }
