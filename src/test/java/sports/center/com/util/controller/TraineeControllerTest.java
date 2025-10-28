@@ -53,7 +53,6 @@ class TraineeControllerTest {
 
     @Test
     void shouldRegisterTrainee() throws Exception {
-        TraineeRequestDto requestDto = new TraineeRequestDto("John", "Doe", new Date(90, 0, 1), "123 Main St", true);
         TraineeResponseDto responseDto = TraineeResponseDto.builder()
                 .firstName("John")
                 .lastName("Doe")
@@ -98,7 +97,6 @@ class TraineeControllerTest {
 
     @Test
     void shouldUpdateTraineeProfile() throws Exception {
-        TraineeRequestDto requestDto = new TraineeRequestDto("Updated", "User", new Date(90, 0, 1), "456 New St", true);
         TraineeResponseDto responseDto = TraineeResponseDto.builder()
                 .firstName("Updated")
                 .lastName("User")

@@ -18,9 +18,7 @@ public class TrainerRequestDto {
     @NotBlank(message = "Last name is mandatory")
     @Size(min = 2, max = 50, message = "Last name must be between 2 and 50 characters long")
     private String lastName;
-
     @NotNull(message = "Specialization ID is mandatory")
     private Long specializationId;
-
     private Boolean isActive;
 }

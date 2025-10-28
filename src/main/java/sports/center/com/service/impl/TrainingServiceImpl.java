@@ -1,10 +1,11 @@
 package sports.center.com.service.impl;
 
-import jakarta.servlet.http.HttpServletRequest;
+import jakarta.validation.ConstraintViolation;
 import jakarta.validation.Validator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.slf4j.MDC;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import sports.center.com.dto.trainer.TrainerResponseDto;
@@ -22,7 +23,6 @@ import sports.center.com.repository.TrainingRepository;
 import sports.center.com.repository.TrainingTypeRepository;
 import sports.center.com.service.TrainingService;
 
-import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -36,7 +36,6 @@ public class TrainingServiceImpl implements TrainingService {
     private final TrainerRepository trainerRepository;
     private final TrainingTypeRepository trainingTypeRepository;
     private final Validator validator;
-    private final HttpServletRequest request;
 
     @Override
     public TrainingResponseDto addTraining(TrainingRequestDto request) {
@@ -78,18 +77,30 @@ public class TrainingServiceImpl implements TrainingService {
     }
 
     private Trainee findTraineeByUsername(String username) {
+        String transactionId = MDC.get("transactionId");
         return traineeRepository.findByUsername(username)
-                .orElseThrow(() -> new TraineeNotFoundException("Trainee not found: " + username));
+                .orElseThrow(() -> {
+                    log.warn("[Transaction ID: {}] Trainee not found: {}", transactionId, username);
+                    return new TraineeNotFoundException("Trainee not found: " + username);
+                });
     }
 
     private Trainer findTrainerByUsername(String username) {
+        String transactionId = MDC.get("transactionId");
         return trainerRepository.findByUsername(username)
-                .orElseThrow(() -> new TrainerNotFoundException("Trainer not found: " + username));
+                .orElseThrow(() -> {
+                    log.warn("[Transaction ID: {}] Trainer not found: {}", transactionId, username);
+                    return new TrainerNotFoundException("Trainer not found: " + username);
+                });
     }
 
     private TrainingType findTrainingTypeByName(String trainingTypeName) {
+        String transactionId = MDC.get("transactionId");
         return trainingTypeRepository.findByTrainingTypeName(trainingTypeName)
-                .orElseThrow(() -> new TrainingTypeNotFoundException("Training type not found: " + trainingTypeName));
+                .orElseThrow(() -> {
+                    log.warn("[Transaction ID: {}] Training type not found: {}", transactionId, trainingTypeName);
+                    return new TrainingTypeNotFoundException("Training type not found: " + trainingTypeName);
+                });
     }
 
     private void assignTrainerIfNotAssigned(Trainee trainee, Trainer trainer) {
@@ -125,8 +136,11 @@ public class TrainingServiceImpl implements TrainingService {
 
     @Override
     public List<TrainingTypeResponseDto> getTrainingType() {
+        String transactionId = MDC.get("transactionId");
+        log.info("[Transaction ID: {}] Fetching all training types", transactionId);
         List<TrainingType> trainingTypes = trainingTypeRepository.findAll();
 
+        log.debug("[Transaction ID: {}] Found {} training types", transactionId, trainingTypes.size());
         return trainingTypes.stream()
                 .map(this::mapToResponseTrainingType)
                 .collect(Collectors.toList());
@@ -137,7 +151,6 @@ public class TrainingServiceImpl implements TrainingService {
         String transactionId = MDC.get("transactionId");
         String username = getAuthenticatedUsername();
         log.info("[Transaction ID: {}] Update trainers list for trainee: {}", transactionId, username);
-
 
         Trainee trainee = getTraineeOrThrow(username);
         List<Trainer> validTrainers = getValidTrainersOrThrow(trainerUsernames);
@@ -176,17 +189,24 @@ public class TrainingServiceImpl implements TrainingService {
     }
 
     private Trainee getTraineeOrThrow(String username) {
+        String transactionId = MDC.get("transactionId");
         return traineeRepository.findByUsername(username)
-                .orElseThrow(() -> new TraineeNotFoundException("Trainee not found with username: " + username));
+                .orElseThrow(() -> {
+                    log.warn("[Transaction ID: {}] Trainee not found: {}", transactionId, username);
+                    return new TraineeNotFoundException("Trainee not found with username: " + username);
+                });
     }
 
     private List<Trainer> getValidTrainersOrThrow(List<String> trainerUsernames) {
+        String transactionId = MDC.get("transactionId");
         if (trainerUsernames == null || trainerUsernames.isEmpty()) {
+            log.warn("[Transaction ID: {}] Trainer usernames list cannot be empty", transactionId);
             throw new EmptyTrainerListException("Trainer usernames list cannot be empty!");
         }
 
         List<Trainer> trainers = trainerRepository.findByUsernameIn(trainerUsernames);
         if (trainers.size() != trainerUsernames.size()) {
+            log.warn("[Transaction ID: {}] Some trainers were not found in the database", transactionId);
             throw new TraineeNotFoundException("Some trainers were not found in the database!");
         }
         return trainers;
@@ -194,16 +214,16 @@ public class TrainingServiceImpl implements TrainingService {
 
     private void validateTrainingRequest(TrainingRequestDto request) {
         String transactionId = MDC.get("transactionId");
-        Set<jakarta.validation.ConstraintViolation<TrainingRequestDto>> violations = validator.validate(request);
+        Set<ConstraintViolation<TrainingRequestDto>> violations = validator.validate(request);
         if (!violations.isEmpty()) {
             String errors = violations.stream()
-                    .map(jakarta.validation.ConstraintViolation::getMessage)
+                    .map(ConstraintViolation::getMessage)
                     .collect(Collectors.joining(", "));
 
             log.warn("[Transaction ID: {}] Validation failed: {}", transactionId, errors);
 
-            Set<jakarta.validation.ConstraintViolation<?>> genericViolations = violations.stream()
-                    .map(v -> (jakarta.validation.ConstraintViolation<?>) v)
+            Set<ConstraintViolation<?>> genericViolations = violations.stream()
+                    .map(v -> (ConstraintViolation<?>) v)
                     .collect(Collectors.toSet());
 
             throw new InvalidTrainingRequestException("Validation failed: " + errors, genericViolations);
@@ -220,52 +240,18 @@ public class TrainingServiceImpl implements TrainingService {
 
     private String getAuthenticatedUsername() {
         String transactionId = MDC.get("transactionId");
-        String authHeader = request.getHeader("Authorization");
-
-        if (authHeader == null || !authHeader.startsWith("Basic ")) {
-            log.warn("[Transaction ID: {}] Unauthorized request", transactionId);
+        try {
+            String username = SecurityContextHolder.getContext().getAuthentication().getName();
+            if (username == null || username.isEmpty()) {
+                log.warn("[Transaction ID: {}] No authenticated user found", transactionId);
+                throw new UnauthorizedException("No authenticated user found");
+            }
+            log.info("[Transaction ID: {}] Authenticated user: {}", transactionId, username);
+            return username;
+        } catch (Exception e) {
+            log.warn("[Transaction ID: {}] Unauthorized request: {}", transactionId, e.getMessage());
             throw new UnauthorizedException("Unauthorized request");
         }
-
-        String base64Credentials = authHeader.substring("Basic ".length());
-        String credentials = new String(Base64.getDecoder().decode(base64Credentials), StandardCharsets.UTF_8);
-        String[] values = credentials.split(":", 2);
-
-        if (values.length != 2) {
-            log.warn("[Transaction ID: {}] Invalid authentication format", transactionId);
-            throw new UnauthorizedException("Invalid authentication format");
-        }
-
-        String username = values[0];
-        String password = values[1];
-
-        log.info("[Transaction ID: {}] Attempting authentication for username: {}", transactionId, username);
-
-        Optional<Trainee> traineeOptional = traineeRepository.findByUsername(username);
-        if (traineeOptional.isPresent()) {
-            return validatePasswordAndReturnUsername(traineeOptional.get(), password, username, "trainee");
-        }
-
-        Optional<Trainer> trainerOptional = trainerRepository.findByUsername(username);
-        if (trainerOptional.isPresent()) {
-            return validatePasswordAndReturnUsername(trainerOptional.get(), password, username, "trainer");
-        }
-
-        log.warn("[Transaction ID: {}] Authentication failed: username {} not found", transactionId, username);
-        throw new UnauthorizedException("Invalid username or password");
-    }
-
-    private String validatePasswordAndReturnUsername(Object user, String password, String username, String userType) {
-        String transactionId = MDC.get("transactionId");
-        String userPassword = (user instanceof Trainee) ? ((Trainee) user).getPassword() : ((Trainer) user).getPassword();
-
-        if (userPassword == null || !userPassword.equals(password)) {
-            log.warn("[Transaction ID: {}] Authentication failed: incorrect or missing password for {} {}", transactionId, userType, username);
-            throw new UnauthorizedException("Invalid username or password");
-        }
-
-        log.info("[Transaction ID: {}] Authentication successful for {}: {}", transactionId, userType, username);
-        return username;
     }
 
     private List<TrainerResponseDto> mapTrainersToResponse(List<Trainer> trainers) {

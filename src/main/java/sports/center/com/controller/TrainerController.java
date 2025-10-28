@@ -3,6 +3,7 @@ package sports.center.com.controller;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -20,6 +21,7 @@ import sports.center.com.service.TrainerService;
 @RequestMapping("/trainer")
 @RequiredArgsConstructor
 @Tag(name = "Trainer Management", description = "Operations related to trainers")
+@SecurityRequirement(name = "bearerAuth")
 public class TrainerController {
     private final TrainerService trainerService;
 

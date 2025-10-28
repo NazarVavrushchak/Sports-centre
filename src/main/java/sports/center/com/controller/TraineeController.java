@@ -3,6 +3,7 @@ package sports.center.com.controller;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -13,7 +14,6 @@ import org.springframework.web.bind.annotation.*;
 import sports.center.com.constant.HttpStatuses;
 import sports.center.com.dto.trainee.TraineeRequestDto;
 import sports.center.com.dto.trainee.TraineeResponseDto;
-import sports.center.com.service.AuthService;
 import sports.center.com.service.TraineeService;
 
 @Slf4j
@@ -21,9 +21,9 @@ import sports.center.com.service.TraineeService;
 @RequestMapping("/trainee")
 @RequiredArgsConstructor
 @Tag(name = "Trainee Management", description = "Operations related to trainees")
+@SecurityRequirement(name = "bearerAuth")
 public class TraineeController {
     private final TraineeService traineeService;
-    private final AuthService authService;
 
     @Operation(summary = "Register a new trainee")
     @ApiResponses(value = {

@@ -8,7 +8,7 @@ import sports.center.com.metrics.CustomMetrics;
 import java.util.concurrent.TimeUnit;
 
 @RestController
-@RequestMapping("/api")
+@RequestMapping("/metrics")
 public class MetricsController {
     private final CustomMetrics customMetrics;
 

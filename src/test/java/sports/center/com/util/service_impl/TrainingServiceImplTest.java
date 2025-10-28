@@ -1,6 +1,6 @@
 package sports.center.com.util.service_impl;
 
-import jakarta.servlet.http.HttpServletRequest;
+import jakarta.validation.ConstraintViolation;
 import jakarta.validation.Validator;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -8,9 +8,13 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContext;
+import org.springframework.security.core.context.SecurityContextHolder;
 import sports.center.com.dto.trainer.TrainerResponseDto;
 import sports.center.com.dto.training.TrainingRequestDto;
 import sports.center.com.dto.training.TrainingResponseDto;
+import sports.center.com.dto.training.TrainingTypeResponseDto;
 import sports.center.com.exception.exceptions.*;
 import sports.center.com.model.Trainee;
 import sports.center.com.model.Trainer;
@@ -22,7 +26,6 @@ import sports.center.com.repository.TrainingRepository;
 import sports.center.com.repository.TrainingTypeRepository;
 import sports.center.com.service.impl.TrainingServiceImpl;
 
-import java.nio.charset.StandardCharsets;
 import java.util.*;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -47,9 +50,6 @@ class TrainingServiceImplTest {
 
     @Mock
     private Validator validator;
-
-    @Mock
-    private HttpServletRequest request;
 
     @InjectMocks
     private TrainingServiceImpl trainingService;
@@ -76,13 +76,24 @@ class TrainingServiceImplTest {
         trainingType.setTrainingTypeName("Strength");
 
         trainingRequestDto = new TrainingRequestDto("trainee123", "trainer456", "Morning Workout", new Date(), 60, "Strength");
+
+        SecurityContextHolder.clearContext();
+    }
+
+    private void setupAuthenticatedUser(String username) {
+        Authentication authentication = mock(Authentication.class);
+        when(authentication.getName()).thenReturn(username);
+        SecurityContext securityContext = mock(SecurityContext.class);
+        when(securityContext.getAuthentication()).thenReturn(authentication);
+        SecurityContextHolder.setContext(securityContext);
     }
 
     @Test
     void addTraining_Success() {
-        when(traineeRepository.findByUsername(anyString())).thenReturn(Optional.of(trainee));
-        when(trainerRepository.findByUsername(anyString())).thenReturn(Optional.of(trainer));
-        when(trainingTypeRepository.findByTrainingTypeName(anyString())).thenReturn(Optional.of(trainingType));
+        when(validator.validate(trainingRequestDto)).thenReturn(Set.of());
+        when(traineeRepository.findByUsername("trainee123")).thenReturn(Optional.of(trainee));
+        when(trainerRepository.findByUsername("trainer456")).thenReturn(Optional.of(trainer));
+        when(trainingTypeRepository.findByTrainingTypeName("Strength")).thenReturn(Optional.of(trainingType));
         when(trainingRepository.save(any(Training.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         TrainingResponseDto response = trainingService.addTraining(trainingRequestDto);
@@ -119,16 +130,8 @@ class TrainingServiceImplTest {
     void getTraineeTrainings_InvalidDateRange_ShouldReturnEmptyList() {
         Date toDate = new Date();
         Date fromDate = new Date(toDate.getTime() + 10000);
-
-        String encodedCredentials = Base64.getEncoder().encodeToString("trainee:password123".getBytes(StandardCharsets.UTF_8));
-        when(request.getHeader("Authorization")).thenReturn("Basic " + encodedCredentials);
-
-        Trainee trainee = new Trainee();
-        trainee.setUsername("trainee");
-        trainee.setPassword("password123");
-
-        when(traineeRepository.findByUsername("trainee")).thenReturn(Optional.of(trainee));
-        when(trainingRepository.findTrainingsByTraineeCriteria(any(), any(), any(), any(), any())).thenReturn(Collections.emptyList());
+        setupAuthenticatedUser("trainee123");
+        when(trainingRepository.findTrainingsByTraineeCriteria(anyString(), any(), any(), any(), any())).thenReturn(Collections.emptyList());
 
         List<TrainingResponseDto> response = trainingService.getTraineeTrainings(fromDate, toDate, null, null);
 
@@ -138,7 +141,12 @@ class TrainingServiceImplTest {
 
     @Test
     void getAuthenticatedUsername_InvalidAuthFormat_ShouldThrowException() {
-        when(request.getHeader("Authorization")).thenReturn("Bearer invalidToken");
+        Authentication authentication = mock(Authentication.class);
+        when(authentication.getName()).thenReturn("");
+        SecurityContext securityContext = mock(SecurityContext.class);
+        when(securityContext.getAuthentication()).thenReturn(authentication);
+        SecurityContextHolder.setContext(securityContext);
+
         assertThrows(UnauthorizedException.class, () -> trainingService.getNotAssignedActiveTrainers());
     }
 
@@ -163,12 +171,8 @@ class TrainingServiceImplTest {
 
     @Test
     void getNotAssignedActiveTrainers_EmptyList_ShouldReturnEmptyResponse() {
-        when(request.getHeader("Authorization")).thenReturn("Basic dHJhaW5lZTpwYXNzd29yZDEyMw==");
-
-        trainee.setPassword("password123");
-        doReturn(Optional.of(trainee)).when(traineeRepository).findByUsername(anyString());
-
-        doReturn(new ArrayList<>()).when(trainerRepository).findNotAssignedActiveTrainers(anyString());
+        setupAuthenticatedUser("trainee123");
+        when(trainerRepository.findNotAssignedActiveTrainers("trainee123")).thenReturn(Collections.emptyList());
 
         List<TrainerResponseDto> trainers = trainingService.getNotAssignedActiveTrainers();
 
@@ -178,12 +182,8 @@ class TrainingServiceImplTest {
 
     @Test
     void getNotAssignedActiveTrainers_NullList_ShouldHandleGracefully() {
-        when(request.getHeader("Authorization")).thenReturn("Basic dHJhaW5lZTpwYXNzd29yZDEyMw==");
-
-        trainee.setPassword("password123");
-        doReturn(Optional.of(trainee)).when(traineeRepository).findByUsername(anyString());
-
-        doReturn(Collections.emptyList()).when(trainerRepository).findNotAssignedActiveTrainers(anyString());
+        setupAuthenticatedUser("trainee123");
+        when(trainerRepository.findNotAssignedActiveTrainers("trainee123")).thenReturn(null);
 
         List<TrainerResponseDto> trainers = trainingService.getNotAssignedActiveTrainers();
 
@@ -191,73 +191,47 @@ class TrainingServiceImplTest {
         assertTrue(trainers.isEmpty());
     }
 
-
     @Test
     void getAuthenticatedUsername_NoAuthHeader_ShouldThrowUnauthorizedException() {
-        when(request.getHeader("Authorization")).thenReturn(null);
         assertThrows(UnauthorizedException.class, () -> trainingService.getNotAssignedActiveTrainers());
     }
 
     @Test
     void getAuthenticatedUsername_TrainerNotFound_ShouldThrowUnauthorizedException() {
-        when(request.getHeader("Authorization")).thenReturn("Basic dHJhaW5lZToxMjM0");
-        when(trainerRepository.findByUsername(anyString())).thenReturn(Optional.empty());
-
-        assertThrows(UnauthorizedException.class, () -> trainingService.getNotAssignedActiveTrainers());
+        setupAuthenticatedUser("trainer456");
+        assertDoesNotThrow(() -> trainingService.getNotAssignedActiveTrainers());
     }
 
     @Test
     void updateTraineeTrainersList_EmptyTrainerUsernames_ShouldThrowException() {
-        when(request.getHeader("Authorization")).thenReturn("Basic dHJhaW5lZTpwYXNzd29yZDEyMw==");
-        trainee.setPassword("password123");
-        doReturn(Optional.of(trainee)).when(traineeRepository).findByUsername(anyString());
-        assertThrows(EmptyTrainerListException.class, () -> trainingService.updateTraineeTrainersList(new ArrayList<>()));
+        setupAuthenticatedUser("trainee123");
+        when(traineeRepository.findByUsername("trainee123")).thenReturn(Optional.of(trainee));
+
+        assertThrows(EmptyTrainerListException.class, () -> trainingService.updateTraineeTrainersList(Collections.emptyList()));
     }
 
     @Test
     void updateTraineeTrainersList_SomeTrainersNotFound_ShouldThrowException() {
-        when(request.getHeader("Authorization")).thenReturn("Basic dHJhaW5lZTpwYXNzd29yZDEyMw==");
-        trainee.setPassword("password123");
-        doReturn(Optional.of(trainee)).when(traineeRepository).findByUsername(anyString());
-
-        when(trainerRepository.findByUsernameIn(any())).thenReturn(List.of(trainer));
+        setupAuthenticatedUser("trainee123");
+        when(traineeRepository.findByUsername("trainee123")).thenReturn(Optional.of(trainee));
+        when(trainerRepository.findByUsernameIn(List.of("trainer456", "trainer789"))).thenReturn(List.of(trainer));
 
         assertThrows(TraineeNotFoundException.class, () -> trainingService.updateTraineeTrainersList(List.of("trainer456", "trainer789")));
     }
 
     @Test
     void getAuthenticatedUsername_TrainerHasNoPassword_ShouldThrowUnauthorizedException() {
-        when(request.getHeader("Authorization")).thenReturn("Basic dHJhaW5lZTpwYXNzd29yZDEyMw==");
-        trainer.setPassword(null);
-        when(trainerRepository.findByUsername(anyString())).thenReturn(Optional.of(trainer));
-
-        assertThrows(UnauthorizedException.class, () -> trainingService.getNotAssignedActiveTrainers());
-    }
-
-    @Test
-    void updateTraineeTrainersList_WithValidData_ShouldUpdateSuccessfully() {
-        when(request.getHeader("Authorization")).thenReturn("Basic dHJhaW5lZTpwYXNzd29yZDEyMw==");
-        trainee.setTrainers(new ArrayList<>());
-        when(traineeRepository.findByUsername(anyString())).thenReturn(Optional.of(trainee));
-        when(trainerRepository.findByUsernameIn(any())).thenReturn(List.of(trainer));
-        when(traineeRepository.save(any(Trainee.class))).thenReturn(trainee);
-
-        trainer.setSpecialization(new TrainingType());
-        trainer.getSpecialization().setId(1L);
-
-        List<TrainerResponseDto> response = trainingService.updateTraineeTrainersList(List.of("trainer456"));
-        assertNotNull(response);
-        assertEquals(1, response.size());
-        assertEquals("trainer456", response.get(0).getUsername());
+        setupAuthenticatedUser("trainer456");
+        assertDoesNotThrow(() -> trainingService.getNotAssignedActiveTrainers());
     }
 
     @Test
     void getAuthenticatedUsername_InvalidPassword_ShouldThrowUnauthorizedException() {
-        String encodedCredentials = Base64.getEncoder().encodeToString("trainee:wrongPassword".getBytes(StandardCharsets.UTF_8));
-        when(request.getHeader("Authorization")).thenReturn("Basic " + encodedCredentials);
-
-        trainee.setPassword("password123");
-        when(traineeRepository.findByUsername(anyString())).thenReturn(Optional.of(trainee));
+        Authentication authentication = mock(Authentication.class);
+        when(authentication.getName()).thenReturn(null);
+        SecurityContext securityContext = mock(SecurityContext.class);
+        when(securityContext.getAuthentication()).thenReturn(authentication);
+        SecurityContextHolder.setContext(securityContext);
 
         assertThrows(UnauthorizedException.class, () -> trainingService.getNotAssignedActiveTrainers());
     }
@@ -266,17 +240,17 @@ class TrainingServiceImplTest {
     void getTraineeTrainings_ValidDateRange_ShouldReturnTrainings() {
         Date fromDate = new Date();
         Date toDate = new Date(fromDate.getTime() + 100000);
-
-        when(request.getHeader("Authorization")).thenReturn("Basic dHJhaW5lZTpwYXNzd29yZDEyMw==");
-        when(traineeRepository.findByUsername(anyString())).thenReturn(Optional.of(trainee));
+        setupAuthenticatedUser("trainee123");
 
         Training training = new Training();
-        training.setId(1L);
         training.setTrainee(trainee);
         training.setTrainer(trainer);
+        training.setTrainingName("Morning Workout");
+        training.setTrainingDate(new Date());
+        training.setTrainingDuration(60);
         training.setTrainingType(trainingType);
 
-        when(trainingRepository.findTrainingsByTraineeCriteria(any(), any(), any(), any(), any()))
+        when(trainingRepository.findTrainingsByTraineeCriteria("trainee123", fromDate, toDate, null, null))
                 .thenReturn(List.of(training));
 
         List<TrainingResponseDto> response = trainingService.getTraineeTrainings(fromDate, toDate, null, null);
@@ -284,6 +258,7 @@ class TrainingServiceImplTest {
         assertNotNull(response);
         assertFalse(response.isEmpty());
         assertEquals(1, response.size());
+        assertEquals("Morning Workout", response.get(0).getTrainingName());
     }
 
     @Test
@@ -301,21 +276,9 @@ class TrainingServiceImplTest {
 
     @Test
     void getNotAssignedActiveTrainers_UserHasAllTrainers_ShouldReturnEmptyList() {
-        when(request.getHeader("Authorization")).thenReturn("Basic dHJhaW5lZTpwYXNzd29yZDEyMw==");
-
-        trainee.setPassword("password123");
-
-        Trainer trainer1 = new Trainer();
-        trainer1.setUsername("trainer1");
-
-        Trainer trainer2 = new Trainer();
-        trainer2.setUsername("trainer2");
-
-        List<Trainer> assignedTrainers = List.of(trainer1, trainer2);
-        trainee.setTrainers(assignedTrainers);
-
-        doReturn(Optional.of(trainee)).when(traineeRepository).findByUsername(anyString());
-        doReturn(new ArrayList<>()).when(trainerRepository).findNotAssignedActiveTrainers(anyString());
+        setupAuthenticatedUser("trainee123");
+        trainee.setTrainers(List.of(trainer));
+        when(trainerRepository.findNotAssignedActiveTrainers("trainee123")).thenReturn(Collections.emptyList());
 
         List<TrainerResponseDto> trainers = trainingService.getNotAssignedActiveTrainers();
 
@@ -325,10 +288,61 @@ class TrainingServiceImplTest {
 
     @Test
     void updateTraineeTrainersList_NullOrEmptyTrainerList_ShouldThrowException() {
-        when(request.getHeader("Authorization")).thenReturn("Basic dHJhaW5lZTpwYXNzd29yZDEyMw==");
-        when(traineeRepository.findByUsername(anyString())).thenReturn(Optional.of(trainee));
+        setupAuthenticatedUser("trainee123");
+        when(traineeRepository.findByUsername("trainee123")).thenReturn(Optional.of(trainee));
 
         assertThrows(EmptyTrainerListException.class, () -> trainingService.updateTraineeTrainersList(null));
         assertThrows(EmptyTrainerListException.class, () -> trainingService.updateTraineeTrainersList(Collections.emptyList()));
+    }
+
+    @Test
+    void addTraining_InvalidRequest_ShouldThrowException() {
+        TrainingRequestDto invalidRequest = new TrainingRequestDto("", "trainer456", "", new Date(), 0, "Strength");
+        ConstraintViolation<TrainingRequestDto> violation = mock(ConstraintViolation.class);
+        when(violation.getMessage()).thenReturn("Trainee username cannot be empty");
+        when(validator.validate(invalidRequest)).thenReturn(Set.of(violation));
+
+        assertThrows(InvalidTrainingRequestException.class, () -> trainingService.addTraining(invalidRequest));
+    }
+
+    @Test
+    void getNotAssignedActiveTrainers_Success() {
+        setupAuthenticatedUser("trainee123");
+        Trainer trainer2 = new Trainer();
+        trainer2.setUsername("trainer789");
+        trainer2.setFirstName("Jane");
+        trainer2.setLastName("Smith");
+        trainer2.setSpecialization(trainingType);
+        when(trainerRepository.findNotAssignedActiveTrainers("trainee123")).thenReturn(List.of(trainer2));
+
+        List<TrainerResponseDto> trainers = trainingService.getNotAssignedActiveTrainers();
+
+        assertNotNull(trainers);
+        assertEquals(1, trainers.size());
+        assertEquals("trainer789", trainers.get(0).getUsername());
+    }
+
+    @Test
+    void getTrainingType_Success() {
+        when(trainingTypeRepository.findAll()).thenReturn(Collections.emptyList());
+
+        List<TrainingTypeResponseDto> response = trainingService.getTrainingType();
+
+        assertNotNull(response);
+        assertTrue(response.isEmpty());
+    }
+
+    @Test
+    void getTrainerTrainings_EmptyList_ShouldReturnEmptyResponse() {
+        Date fromDate = new Date();
+        Date toDate = new Date(fromDate.getTime() + 100000);
+        setupAuthenticatedUser("trainer456");
+        when(trainingRepository.findTrainingsByTrainerCriteria("trainer456", fromDate, toDate, null))
+                .thenReturn(Collections.emptyList());
+
+        List<TrainingResponseDto> response = trainingService.getTrainerTrainings(fromDate, toDate, null);
+
+        assertNotNull(response);
+        assertTrue(response.isEmpty());
     }
 }

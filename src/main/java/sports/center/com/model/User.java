@@ -6,6 +6,8 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.ToString;
 
+import java.util.Date;
+
 @Entity
 @Table(name = "users")
 @Getter
@@ -28,4 +30,10 @@ public class User {
     private String password;
     @Column(nullable = false)
     private Boolean isActive;
+    @Column(name = "failed_attempt", nullable = false)
+    private Integer failedAttempt;
+    @Column(name = "account_non_locked", nullable = false)
+    private Boolean accountNonLocked;
+    @Column(name = "lock_time")
+    private Date lockTime;
 }

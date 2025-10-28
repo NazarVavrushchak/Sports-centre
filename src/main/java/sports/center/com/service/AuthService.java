@@ -1,11 +1,8 @@
 package sports.center.com.service;
 
-import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.http.ResponseEntity;
+import sports.center.com.dto.security.AuthResponse;
 
 public interface AuthService {
-    boolean authenticateTrainee(String username, String password);
-
-    boolean authenticateTrainer(String username, String password);
-
-    boolean authenticateRequest(HttpServletRequest request);
+    ResponseEntity<AuthResponse> authenticateAndGenerateToken(String username, String password, String ipAddress);
 }

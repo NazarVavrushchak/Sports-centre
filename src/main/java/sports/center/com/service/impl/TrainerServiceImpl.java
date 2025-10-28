@@ -1,10 +1,12 @@
 package sports.center.com.service.impl;
 
-import jakarta.servlet.http.HttpServletRequest;
+import jakarta.validation.ConstraintViolation;
 import jakarta.validation.Validator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.slf4j.MDC;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import sports.center.com.dto.trainee.TraineeResponseDto;
@@ -15,14 +17,13 @@ import sports.center.com.model.Trainer;
 import sports.center.com.model.TrainingType;
 import sports.center.com.repository.TrainerRepository;
 import sports.center.com.repository.TrainingTypeRepository;
+import sports.center.com.security.JwtTool;
 import sports.center.com.service.TrainerService;
+import sports.center.com.service.UserService;
 import sports.center.com.util.PasswordUtil;
 import sports.center.com.util.UsernameUtil;
 
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
-import java.util.Base64;
-import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -35,7 +36,9 @@ public class TrainerServiceImpl implements TrainerService {
     private final TrainingTypeRepository trainingTypeRepository;
     private final UsernameUtil usernameUtil;
     private final Validator validator;
-    private final HttpServletRequest request;
+    private final PasswordEncoder passwordEncoder;
+    private final UserService userService;
+    private final JwtTool jwtTool;
 
     @Override
     public TrainerResponseDto createTrainer(TrainerRequestDto trainerRequestDto) {
@@ -55,16 +58,19 @@ public class TrainerServiceImpl implements TrainerService {
         trainer.setFirstName(trainerRequestDto.getFirstName());
         trainer.setLastName(trainerRequestDto.getLastName());
         trainer.setUsername(username);
-        trainer.setPassword(password);
+        trainer.setPassword(passwordEncoder.encode(password));
         trainer.setIsActive(true);
         trainer.setSpecialization(specialization);
+        userService.initializeNewUser(trainer);
 
         trainerRepository.save(trainer);
+        String token = jwtTool.generateToken(username);
         log.info("[{}] Trainer created successfully: {}", transactionId, trainer.getUsername());
 
         return TrainerResponseDto.builder()
                 .username(username)
                 .password(password)
+                .token(token)
                 .build();
     }
 
@@ -89,8 +95,7 @@ public class TrainerServiceImpl implements TrainerService {
         validatePassword(newPassword);
 
         Trainer trainer = getTrainerOrThrow(username);
-        trainer.setPassword(newPassword);
-
+        trainer.setPassword(passwordEncoder.encode(newPassword));
         trainerRepository.save(trainer);
 
         log.info("[{}] Trainer password changed successfully: {}", transactionId, username);
@@ -104,11 +109,19 @@ public class TrainerServiceImpl implements TrainerService {
         String username = getAuthenticatedUsername();
         log.info("[{}] Updating trainer profile: {}", transactionId, username);
 
+        validateRequest(request);
+
         Trainer trainer = findTrainerByUsername(username);
 
         trainer.setFirstName(request.getFirstName());
         trainer.setLastName(request.getLastName());
         trainer.setIsActive(request.getIsActive());
+
+        if (request.getSpecializationId() != null) {
+            TrainingType specialization = trainingTypeRepository.findById(request.getSpecializationId())
+                    .orElseThrow(() -> new SpecializationNotFoundException(request.getSpecializationId()));
+            trainer.setSpecialization(specialization);
+        }
 
         trainerRepository.save(trainer);
         log.info("[{}] Trainer profile updated successfully: {}", transactionId, username);
@@ -143,16 +156,16 @@ public class TrainerServiceImpl implements TrainerService {
 
     private void validateRequest(TrainerRequestDto request) {
         String transactionId = MDC.get("transactionId");
-        Set<jakarta.validation.ConstraintViolation<TrainerRequestDto>> violations = validator.validate(request);
+        Set<ConstraintViolation<TrainerRequestDto>> violations = validator.validate(request);
         if (!violations.isEmpty()) {
             String errors = violations.stream()
-                    .map(jakarta.validation.ConstraintViolation::getMessage)
+                    .map(ConstraintViolation::getMessage)
                     .collect(Collectors.joining(", "));
 
             log.warn("[{}] Validation failed: {}", transactionId, errors);
 
-            Set<jakarta.validation.ConstraintViolation<?>> genericViolations = violations.stream()
-                    .map(v -> (jakarta.validation.ConstraintViolation<?>) v)
+            Set<ConstraintViolation<?>> genericViolations = violations.stream()
+                    .map(v -> (ConstraintViolation<?>) v)
                     .collect(Collectors.toSet());
 
             throw new InvalidTrainerRequestException("Validation failed: " + errors, genericViolations);
@@ -161,40 +174,18 @@ public class TrainerServiceImpl implements TrainerService {
 
     private String getAuthenticatedUsername() {
         String transactionId = MDC.get("transactionId");
-        String authHeader = request.getHeader("Authorization");
-
-        if (authHeader != null && authHeader.startsWith("Basic ")) {
-            String base64Credentials = authHeader.substring("Basic ".length());
-            String credentials = new String(Base64.getDecoder().decode(base64Credentials), StandardCharsets.UTF_8);
-            String[] values = credentials.split(":", 2);
-
-            if (values.length != 2) {
-                throw new UnauthorizedException("Invalid authentication format");
+        try {
+            String username = SecurityContextHolder.getContext().getAuthentication().getName();
+            if (username == null || username.isEmpty()) {
+                log.warn("Transaction [{}] - No authenticated user found", transactionId);
+                throw new UnauthorizedException("No authenticated user found");
             }
-
-            String username = values[0];
-            String password = values[1];
-
-            log.info("[{}] Attempting authentication for username: {}", transactionId, username);
-
-            Optional<Trainer> trainerOptional = trainerRepository.findByUsername(username);
-            if (trainerOptional.isEmpty()) {
-                log.warn("[{}] Authentication failed: username {} not found", transactionId, username);
-                throw new UnauthorizedException("Invalid username or password");
-            }
-
-            Trainer trainer = trainerOptional.get();
-
-            if (trainer.getPassword() == null || !trainer.getPassword().equals(password)) {
-                log.warn("[{}] Authentication failed: incorrect or missing password for user {}", transactionId, username);
-                throw new UnauthorizedException("Invalid username or password");
-            }
-
-            log.info("[{}] Authentication successful for user: {}", transactionId, username);
+            log.info("Transaction [{}] - Authenticated user: {}", transactionId, username);
             return username;
+        } catch (Exception e) {
+            log.warn("Transaction [{}] - Unauthorized request: {}", transactionId, e.getMessage());
+            throw new UnauthorizedException("Unauthorized request");
         }
-
-        throw new UnauthorizedException("Unauthorized request");
     }
 
     private void validatePassword(String password) {
@@ -210,8 +201,12 @@ public class TrainerServiceImpl implements TrainerService {
     }
 
     private Trainer findTrainerByUsername(String username) {
+        String transactionId = MDC.get("transactionId");
         return trainerRepository.findByUsername(username)
-                .orElseThrow(() -> new TrainerNotFoundException("Trainer not found: " + username));
+                .orElseThrow(() -> {
+                    log.warn("[{}] Trainer not found: {}", transactionId, username);
+                    return new TrainerNotFoundException("Trainer not found: " + username);
+                });
     }
 
     private TrainerResponseDto mapToResponseWithTrainees(Trainer trainer) {
@@ -237,13 +232,13 @@ public class TrainerServiceImpl implements TrainerService {
                 .lastName(trainer.getLastName())
                 .specializationId(trainer.getSpecialization().getId())
                 .isActive(trainer.getIsActive())
-                .trainees(trainer.getTrainees().stream()
+                .trainees(trainer.getTrainees() != null ? trainer.getTrainees().stream()
                         .map(trainee -> TraineeResponseDto.builder()
                                 .username(trainee.getUsername())
                                 .firstName(trainee.getFirstName())
                                 .lastName(trainee.getLastName())
                                 .build())
-                        .collect(Collectors.toList()))
+                        .collect(Collectors.toList()) : new ArrayList<>())
                 .build();
     }
 }

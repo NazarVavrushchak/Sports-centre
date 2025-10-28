@@ -25,7 +25,7 @@ public class TraineeResponseDto {
     private Date dateOfBirth;
     private String address;
     private Boolean isActive;
-
     @Singular
     private List<TrainerResponseDto> trainers;
+    private String token;
 }
