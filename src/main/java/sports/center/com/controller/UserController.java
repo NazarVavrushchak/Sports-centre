@@ -51,20 +51,20 @@ public class UserController {
         return logoutService.logout(request);
     }
 
-        @Operation(summary = "Change Trainee login")
-        @ApiResponses(value = {
-                @ApiResponse(responseCode = "200", description = HttpStatuses.OK),
-                @ApiResponse(responseCode = "400", description = HttpStatuses.BAD_REQUEST),
-                @ApiResponse(responseCode = "401", description = HttpStatuses.UNAUTHORIZED),
-                @ApiResponse(responseCode = "500", description = HttpStatuses.INTERNAL_SERVER_ERROR)
-        })
-        @PutMapping("/trainee/login")
-        public ResponseEntity<String> changeTraineeLogin(@RequestParam("newPassword") String newPassword) {
-            boolean isUpdated = traineeService.changeTraineePassword(newPassword);
-            return isUpdated
-                    ? ResponseEntity.ok(HttpStatuses.OK)
-                    : ResponseEntity.status(HttpStatus.BAD_REQUEST).body(HttpStatuses.BAD_REQUEST);
-        }
+    @Operation(summary = "Change Trainee login")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = HttpStatuses.OK),
+            @ApiResponse(responseCode = "400", description = HttpStatuses.BAD_REQUEST),
+            @ApiResponse(responseCode = "401", description = HttpStatuses.UNAUTHORIZED),
+            @ApiResponse(responseCode = "500", description = HttpStatuses.INTERNAL_SERVER_ERROR)
+    })
+    @PutMapping("/trainee/login")
+    public ResponseEntity<String> changeTraineeLogin(@RequestParam("newPassword") String newPassword) {
+        boolean isUpdated = traineeService.changeTraineePassword(newPassword);
+        return isUpdated
+                ? ResponseEntity.ok(HttpStatuses.OK)
+                : ResponseEntity.status(HttpStatus.BAD_REQUEST).body(HttpStatuses.BAD_REQUEST);
+    }
 
     @Operation(summary = "Change Trainer login")
     @ApiResponses(value = {
